@@ -22,7 +22,7 @@ import {
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  Flame,
+  Gauge,
   LayoutDashboard,
   SlidersHorizontal,
   BookOpen,
@@ -31,6 +31,7 @@ import {
   Settings as SettingsIcon,
   LogOut,
   PanelLeft,
+  Terminal,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -75,15 +76,23 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-4">
+            {/* PitDeck Logo — industrial gauge icon */}
             <div className="flex items-center gap-3">
-              <Flame className="h-10 w-10 text-primary" />
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                Grill Command Center
-              </h1>
+              <div className="h-12 w-12 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center">
+                <Gauge className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
+                  PitDeck
+                </h1>
+                <p className="text-xs text-muted-foreground font-mono tracking-wider uppercase">
+                  Open Grill Control
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Monitor, control, and automate your Traeger grill with real-time
-              telemetry, temperature graphing, and smart cook programs.
+            <p className="text-sm text-muted-foreground text-center max-w-sm mt-2">
+              An independent, open-source dashboard for monitoring and controlling
+              WiFi-enabled pellet grills. Built by pitmasters, for pitmasters.
             </p>
           </div>
           <Button
@@ -91,10 +100,13 @@ export default function DashboardLayout({
               window.location.href = getLoginUrl();
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-primary text-primary-foreground"
+            className="w-full shadow-lg hover:shadow-xl transition-all bg-primary text-primary-foreground font-medium"
           >
             Sign in to continue
           </Button>
+          <p className="text-xs text-muted-foreground/60 text-center">
+            Not affiliated with or endorsed by any grill manufacturer.
+          </p>
         </div>
       </div>
     );
@@ -188,9 +200,9 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <Flame className="h-5 w-5 text-primary shrink-0" />
-                  <span className="font-semibold tracking-tight truncate text-foreground">
-                    Grill Command
+                  <Gauge className="h-5 w-5 text-primary shrink-0" />
+                  <span className="font-semibold tracking-tight truncate text-foreground font-mono text-sm">
+                    PitDeck
                   </span>
                 </div>
               ) : null}
@@ -221,11 +233,18 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            {/* Version badge */}
+            {!isCollapsed && (
+              <div className="flex items-center gap-1.5 px-2 mb-2 text-[10px] text-muted-foreground/50 font-mono">
+                <Terminal className="h-3 w-3" />
+                <span>v1.0.0 — open source</span>
+              </div>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-primary/20 text-primary">
+                    <AvatarFallback className="text-xs font-medium bg-primary/20 text-primary font-mono">
                       {user?.name?.charAt(0).toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
@@ -267,8 +286,8 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
               <div className="flex items-center gap-3">
-                <Flame className="h-5 w-5 text-primary" />
-                <span className="tracking-tight text-foreground font-medium">
+                <Gauge className="h-5 w-5 text-primary" />
+                <span className="tracking-tight text-foreground font-medium font-mono text-sm">
                   {activeMenuItem?.label ?? "Menu"}
                 </span>
               </div>

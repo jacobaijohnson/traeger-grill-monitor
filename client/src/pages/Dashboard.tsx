@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
   Thermometer,
   Flame,
@@ -16,7 +15,7 @@ import {
   WifiOff,
   AlertTriangle,
   RefreshCw,
-  Droplets,
+  Gauge,
 } from "lucide-react";
 import { getSystemStatus } from "@shared/traeger-types";
 import { useEffect, useMemo, useState } from "react";
@@ -36,17 +35,17 @@ import {
 function StatusBadge({ code }: { code: number }) {
   const status = getSystemStatus(code);
   const colorMap: Record<string, string> = {
-    gray: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+    gray: "bg-muted text-muted-foreground",
     blue: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    yellow: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    orange: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    yellow: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    orange: "bg-amber-600/20 text-amber-500 border-amber-600/30",
     green: "bg-green-500/20 text-green-400 border-green-500/30",
     purple: "bg-purple-500/20 text-purple-400 border-purple-500/30",
     cyan: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
     red: "bg-red-500/20 text-red-400 border-red-500/30",
   };
   return (
-    <Badge variant="outline" className={`${colorMap[status.color] || colorMap.gray} text-xs font-medium`}>
+    <Badge variant="outline" className={`${colorMap[status.color] || colorMap.gray} text-xs font-mono`}>
       {status.label}
     </Badge>
   );
@@ -58,31 +57,29 @@ function TempCard({
   target,
   icon: Icon,
   color,
-  unit = "°F",
 }: {
   label: string;
   value: number;
   target?: number;
   icon: typeof Thermometer;
   color: string;
-  unit?: string;
 }) {
   return (
     <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">{label}</span>
+          <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">{label}</span>
           <Icon className={`h-4 w-4 ${color}`} />
         </div>
-        <div className="flex items-baseline gap-2">
-          <span className={`text-3xl font-bold tabular-nums ${color}`}>
+        <div className="flex items-baseline gap-1">
+          <span className={`text-3xl font-bold font-mono ${color}`}>
             {value > 0 ? value : "--"}
           </span>
-          <span className="text-sm text-muted-foreground">{unit}</span>
+          <span className="text-sm text-muted-foreground">°F</span>
         </div>
         {target !== undefined && target > 0 && (
-          <div className="mt-1 text-xs text-muted-foreground">
-            Target: {target}{unit}
+          <div className="mt-1 text-xs text-muted-foreground font-mono">
+            Target: {target}°F
           </div>
         )}
       </CardContent>
@@ -91,30 +88,24 @@ function TempCard({
 }
 
 function PelletGauge({ level }: { level: number }) {
-  const getColor = (l: number) => {
-    if (l > 60) return "bg-green-500";
-    if (l > 30) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-
   return (
     <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">Pellet Level</span>
+          <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Pellets</span>
           <Battery className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div className="flex items-baseline gap-2 mb-3">
-          <span className="text-3xl font-bold tabular-nums text-foreground">
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className="text-3xl font-bold font-mono text-foreground">
             {level > 0 ? level : "--"}
           </span>
           <span className="text-sm text-muted-foreground">%</span>
         </div>
-        <Progress value={level} className={`h-2 ${getColor(level)}`} />
+        <Progress value={level} className="h-2" />
         {level > 0 && level <= 30 && (
-          <div className="flex items-center gap-1 mt-2 text-xs text-yellow-400">
+          <div className="flex items-center gap-1 mt-2 text-xs text-amber-400">
             <AlertTriangle className="h-3 w-3" />
-            Low pellets - consider refilling
+            Low pellets — refill soon
           </div>
         )}
       </CardContent>
@@ -141,19 +132,19 @@ function CookTimer({ start, end }: { start: number; end: number }) {
     <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-muted-foreground">Cook Timer</span>
+          <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Timer</span>
           <Timer className="h-4 w-4 text-muted-foreground" />
         </div>
         {isActive ? (
-          <div className="text-3xl font-bold tabular-nums font-mono text-primary">
+          <div className="text-3xl font-bold font-mono text-primary">
             {String(hours).padStart(2, "0")}:{String(minutes).padStart(2, "0")}:
             {String(seconds).padStart(2, "0")}
           </div>
         ) : (
-          <div className="text-3xl font-bold tabular-nums text-muted-foreground">--:--:--</div>
+          <div className="text-3xl font-bold font-mono text-muted-foreground/40">--:--:--</div>
         )}
         {remaining === 0 && isActive && (
-          <div className="text-xs text-primary mt-1">Timer complete!</div>
+          <div className="text-xs text-primary mt-1 font-mono">Timer complete!</div>
         )}
       </CardContent>
     </Card>
@@ -163,16 +154,11 @@ function CookTimer({ start, end }: { start: number; end: number }) {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: status, isLoading: statusLoading } = useTraegerStatus();
-  const { telemetry, history, updateTelemetry } = useTelemetryState();
+  const { telemetry, history } = useTelemetryState();
   const commands = useGrillCommands();
-
-  // Demo data for when grill is not connected - shows UI capability
-  const [demoMode] = useState(true);
 
   useEffect(() => {
     if (!status?.connected || !status?.selectedGrillId) return;
-    // In production, this would connect to MQTT via SSE
-    // For now, request status periodically
     const interval = setInterval(() => {
       commands.requestStatus.mutate();
     }, 30000);
@@ -202,32 +188,38 @@ export default function Dashboard() {
       <div className="max-w-2xl mx-auto mt-12">
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
-            <WifiOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">No Traeger Account Connected</h2>
-            <p className="text-muted-foreground mb-6">
-              Connect your Traeger WiFIRE account to monitor and control your grill in real-time.
+            <div className="inline-flex items-center justify-center h-16 w-16 rounded-xl bg-primary/10 border border-primary/20 mb-4">
+              <Gauge className="h-9 w-9 text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to PitDeck</h2>
+            <p className="text-muted-foreground mb-6 text-sm max-w-sm mx-auto">
+              Connect your grill account in Settings to unlock live telemetry, remote controls, and cook automation.
             </p>
             <Button onClick={() => setLocation("/settings")} className="bg-primary text-primary-foreground">
-              Connect Traeger Account
+              Connect Grill Account
             </Button>
           </CardContent>
         </Card>
 
         <div className="mt-8">
-          <h3 className="text-lg font-semibold text-foreground mb-4">What you'll get:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h3 className="text-sm font-mono uppercase tracking-wider text-muted-foreground mb-4">
+            What you get
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
-              { icon: Thermometer, title: "Live Temperature", desc: "Real-time grill, probe, and ambient temps" },
-              { icon: Flame, title: "Grill Controls", desc: "Set temperature, timers, and Super Smoke" },
+              { icon: Thermometer, title: "Live Telemetry", desc: "Real-time grill, probe, and ambient temperatures" },
+              { icon: Flame, title: "Remote Controls", desc: "Set temperature, timers, Super Smoke, and more" },
               { icon: Timer, title: "Cook Automation", desc: "Multi-stage programs with smart triggers" },
-              { icon: Droplets, title: "Pellet Tracking", desc: "Monitor pellet level and burn rate" },
+              { icon: Battery, title: "Pellet Tracking", desc: "Monitor pellet level with low-level alerts" },
             ].map((item) => (
               <Card key={item.title} className="bg-card/50 border-border">
                 <CardContent className="p-4 flex items-start gap-3">
-                  <item.icon className="h-5 w-5 text-primary mt-0.5" />
+                  <div className="p-2 rounded-lg bg-secondary">
+                    <item.icon className="h-4 w-4 text-primary" />
+                  </div>
                   <div>
                     <div className="font-medium text-foreground text-sm">{item.title}</div>
-                    <div className="text-xs text-muted-foreground">{item.desc}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{item.desc}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -238,7 +230,7 @@ export default function Dashboard() {
     );
   }
 
-  // Connected state - show dashboard
+  // Connected state
   const selectedGrill = status.grills?.find(
     (g: { thingName: string }) => g.thingName === status.selectedGrillId
   );
@@ -248,18 +240,18 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">
             {selectedGrill?.friendlyName || "My Grill"}
           </h1>
           <div className="flex items-center gap-2 mt-1">
             <StatusBadge code={telemetry.systemStatus} />
             {telemetry.connected ? (
-              <div className="flex items-center gap-1 text-xs text-green-400">
-                <Wifi className="h-3 w-3" /> Connected
+              <div className="flex items-center gap-1 text-xs text-green-400 font-mono">
+                <Wifi className="h-3 w-3" /> online
               </div>
             ) : (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <WifiOff className="h-3 w-3" /> Waiting for data...
+              <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
+                <WifiOff className="h-3 w-3" /> waiting...
               </div>
             )}
           </div>
@@ -272,42 +264,32 @@ export default function Dashboard() {
               commands.requestStatus.mutate();
               toast.info("Status request sent");
             }}
+            className="font-mono text-xs"
           >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Refresh
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            refresh
           </Button>
           <Button
             variant="destructive"
             size="sm"
             onClick={() => {
-              if (confirm("Are you sure you want to shut down the grill?")) {
+              if (confirm("Shut down the grill? Fan will run 10-15 min to cool down.")) {
                 commands.shutdown.mutate();
                 toast.success("Shutdown command sent");
               }
             }}
+            className="font-mono text-xs"
           >
-            <Power className="h-4 w-4 mr-1" />
-            Shutdown
+            <Power className="h-3.5 w-3.5 mr-1.5" />
+            shutdown
           </Button>
         </div>
       </div>
 
       {/* Temperature Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <TempCard
-          label="Grill Temp"
-          value={telemetry.grill}
-          target={telemetry.set}
-          icon={Flame}
-          color="text-orange-400"
-        />
-        <TempCard
-          label="Probe Temp"
-          value={telemetry.probe}
-          target={telemetry.probeSet}
-          icon={Thermometer}
-          color="text-red-400"
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <TempCard label="Grill" value={telemetry.grill} target={telemetry.set} icon={Flame} color="text-primary" />
+        <TempCard label="Probe" value={telemetry.probe} target={telemetry.probeSet} icon={Thermometer} color="text-red-400" />
         <PelletGauge level={telemetry.pelletLevel} />
         <CookTimer start={telemetry.cookTimerStart} end={telemetry.cookTimerEnd} />
       </div>
@@ -315,36 +297,38 @@ export default function Dashboard() {
       {/* Quick Controls */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Quick Controls</CardTitle>
+          <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+            Quick Controls
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
-              className={telemetry.smoke ? "border-primary text-primary bg-primary/10" : ""}
+              className={`font-mono text-xs ${telemetry.smoke ? "border-primary text-primary bg-primary/10" : ""}`}
               onClick={() => {
                 commands.setSuperSmoke.mutate({ enabled: !telemetry.smoke });
                 toast.info(telemetry.smoke ? "Super Smoke OFF" : "Super Smoke ON");
               }}
             >
-              <Wind className="h-4 w-4 mr-1" />
-              Super Smoke {telemetry.smoke ? "ON" : "OFF"}
+              <Wind className="h-3.5 w-3.5 mr-1.5" />
+              super smoke {telemetry.smoke ? "on" : "off"}
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className={telemetry.keepwarm ? "border-primary text-primary bg-primary/10" : ""}
+              className={`font-mono text-xs ${telemetry.keepwarm ? "border-primary text-primary bg-primary/10" : ""}`}
               onClick={() => {
                 commands.setKeepWarm.mutate({ enabled: !telemetry.keepwarm });
                 toast.info(telemetry.keepwarm ? "Keep Warm OFF" : "Keep Warm ON");
               }}
             >
-              <Flame className="h-4 w-4 mr-1" />
-              Keep Warm {telemetry.keepwarm ? "ON" : "OFF"}
+              <Flame className="h-3.5 w-3.5 mr-1.5" />
+              keep warm {telemetry.keepwarm ? "on" : "off"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setLocation("/controls")}>
-              All Controls
+            <Button variant="outline" size="sm" onClick={() => setLocation("/controls")} className="font-mono text-xs">
+              all controls
             </Button>
           </div>
         </CardContent>
@@ -352,58 +336,63 @@ export default function Dashboard() {
 
       {/* Temperature Graph */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Temperature History</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Flame className="h-3.5 w-3.5 text-primary" />
+            Temperature History
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="time" stroke="rgba(255,255,255,0.3)" fontSize={11} />
-                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} domain={[0, "auto"]} />
+                <XAxis
+                  dataKey="time"
+                  stroke="rgba(255,255,255,0.3)"
+                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
+                />
+                <YAxis
+                  stroke="rgba(255,255,255,0.3)"
+                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
+                  domain={[0, "auto"]}
+                />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "rgba(23,23,23,0.95)",
+                    backgroundColor: "oklch(0.18 0.012 240)",
                     border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
+                    borderRadius: "6px",
+                    fontFamily: "JetBrains Mono",
+                    fontSize: "11px",
                   }}
+                  labelStyle={{ color: "rgba(255,255,255,0.5)" }}
                 />
-                <Legend />
-                <Line type="monotone" dataKey="grill" stroke="#f97316" strokeWidth={2} dot={false} name="Grill" />
-                <Line type="monotone" dataKey="probe" stroke="#ef4444" strokeWidth={2} dot={false} name="Probe" />
-                <Line type="monotone" dataKey="ambient" stroke="#60a5fa" strokeWidth={1.5} dot={false} name="Ambient" />
-                <Line
-                  type="stepAfter"
-                  dataKey="target"
-                  stroke="#a3a3a3"
-                  strokeWidth={1}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  name="Target"
-                />
+                <Legend wrapperStyle={{ fontFamily: "JetBrains Mono", fontSize: "11px" }} />
+                <Line type="monotone" dataKey="grill" stroke="oklch(0.72 0.14 50)" strokeWidth={2} dot={false} name="Grill" />
+                <Line type="monotone" dataKey="probe" stroke="oklch(0.60 0.18 25)" strokeWidth={2} dot={false} name="Probe" />
+                <Line type="monotone" dataKey="ambient" stroke="oklch(0.65 0.10 220)" strokeWidth={1.5} dot={false} name="Ambient" />
+                <Line type="stepAfter" dataKey="target" stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="5 5" dot={false} name="Target" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-              <Thermometer className="h-8 w-8 mb-2 opacity-50" />
-              <p className="text-sm">Temperature data will appear here once your grill is connected and sending telemetry.</p>
+            <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
+              <Thermometer className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-sm font-mono">Waiting for telemetry data...</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Ambient Temperature */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Status Detail */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card className="bg-card border-border">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Ambient Temp</span>
+              <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Ambient</span>
               <Wind className="h-4 w-4 text-blue-400" />
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold tabular-nums text-blue-400">
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold font-mono text-blue-400">
                 {telemetry.ambient > 0 ? telemetry.ambient : "--"}
               </span>
               <span className="text-sm text-muted-foreground">°F</span>
@@ -412,21 +401,19 @@ export default function Dashboard() {
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-muted-foreground">Grill Status</span>
-            </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2">Status</div>
+            <div className="text-sm text-muted-foreground mb-2">
               {getSystemStatus(telemetry.systemStatus).description}
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <StatusBadge code={telemetry.systemStatus} />
               {telemetry.smoke ? (
-                <Badge variant="outline" className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                <Badge variant="outline" className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs font-mono">
                   Super Smoke
                 </Badge>
               ) : null}
               {telemetry.keepwarm ? (
-                <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-mono">
                   Keep Warm
                 </Badge>
               ) : null}

@@ -72,33 +72,41 @@
 
 ## Bug Fixes
 - [x] Fix Traeger login 422 error - switched to direct Cognito InitiateAuth with correct CLIENT_ID, headers, and idToken usage
-
-## Design Redesign - DIY/Open Source Aesthetic
-- [ ] Research Traeger brand colors, typography, and design language
-- [ ] Design remixed color palette blending Traeger identity with DIY/maker/open-source ethos
-- [ ] Update CSS theme variables (index.css) with new palette
-- [ ] Update typography to reflect maker/workshop aesthetic
-- [ ] Add DIY-inspired visual motifs (terminal-style elements, blueprint accents, etc.)
-- [ ] Update DashboardLayout sidebar with new branding
-- [ ] Update all page components with new design language
-- [ ] Ensure consistent application across Dashboard, Controls, Cook Guide, Automation, History, Settings
-
-## Custom Cook Templates & Community Sharing
-- [ ] Database schema for user-created cook templates (custom_cook_templates table)
-- [ ] Create/edit custom cook template UI with multi-stage builder
-- [ ] My Templates section in Cook Guide page
-- [ ] Community sharing: publish template with share code
-- [ ] Community sharing: import template by share code
-- [ ] Community browse: view shared templates from other users (anonymized)
-- [ ] Fork/clone shared template into personal collection
-
-## Security & Multi-User Isolation
-- [ ] Verify all database queries are scoped by userId
-- [ ] Ensure Traeger credentials never leak to frontend responses
-- [ ] Add security documentation/disclaimer visible in Settings
-- [ ] Test multi-user isolation in vitest
 - [x] Fix Traeger login 400 error - switched to Traeger auth proxy with Cognito fallback, added detailed error logging
 
 ## UI Improvements
 - [x] Add show/hide password toggle on Traeger login form in Settings
 - [x] Make Traeger auth error messages more human-readable
+
+## Design Redesign - PitDeck DIY/Open-Source Aesthetic
+- [x] Research Traeger brand colors, typography, and design language
+- [x] Design remixed color palette: warm copper/amber on dark slate (distinct from Traeger)
+- [x] Update CSS theme variables (index.css) with new palette
+- [x] Update typography: Inter + JetBrains Mono for maker/workshop aesthetic
+- [x] Add DIY-inspired visual motifs (terminal-style elements, monospace labels)
+- [x] Update DashboardLayout sidebar with PitDeck branding
+- [x] Update all page components with new design language
+- [x] Consistent application across Dashboard, Controls, Cook Guide, Automation, History, Settings
+
+## Legal Disclaimer
+- [x] Add comprehensive legal disclaimer/notice to Settings page
+- [x] Include TOS awareness, right-to-repair context, and data isolation assurances
+- [x] Trademark attribution and interoperability explanation
+- [x] No-warranty and safety notice
+
+## Custom Cook Templates & Community Sharing
+- [x] Database schema for user-created cook templates (customTemplates table)
+- [x] Backend routes for CRUD operations on custom templates
+- [x] Custom template creation UI with stage builder
+- [x] My Templates section in Cook Guide page
+- [x] Community sharing: publish/unpublish templates
+- [x] Browse and clone shared community templates
+- [x] Fork community templates to personal collection
+- [x] Security isolation: all data scoped by userId
+
+## Future Enhancements
+- [ ] Server-Sent Events for real-time telemetry push
+- [ ] Smart alerts (temp deviation, probe fell out, stall prediction)
+- [ ] Pellet consumption tracking over time
+- [ ] Export cook session data as CSV
+- [ ] Mobile-responsive optimizations

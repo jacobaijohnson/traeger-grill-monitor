@@ -15,6 +15,13 @@
       "when": 1775425040113,
       "tag": "0001_glamorous_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775427171418,
+      "tag": "0002_solid_puma",
+      "breakpoints": true
     }
   ]
 }

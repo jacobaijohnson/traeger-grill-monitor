@@ -1,0 +1,20 @@
+CREATE TABLE `custom_templates` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`authorName` varchar(128),
+	`name` varchar(128) NOT NULL,
+	`description` text,
+	`category` varchar(32) NOT NULL,
+	`method` varchar(32) NOT NULL,
+	`meatCut` varchar(128),
+	`difficulty` varchar(16) NOT NULL DEFAULT 'intermediate',
+	`estimatedTime` varchar(32),
+	`stagesJson` json NOT NULL,
+	`tipsJson` json,
+	`isPublished` int NOT NULL DEFAULT 0,
+	`forkCount` int NOT NULL DEFAULT 0,
+	`forkedFromId` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `custom_templates_id` PRIMARY KEY(`id`)
+);

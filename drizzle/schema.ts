@@ -88,3 +88,27 @@ export const automationPrograms = mysqlTable("automation_programs", {
 
 export type AutomationProgram = typeof automationPrograms.$inferSelect;
 export type InsertAutomationProgram = typeof automationPrograms.$inferInsert;
+
+// User-created custom cook templates (shareable)
+export const customTemplates = mysqlTable("custom_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  authorName: varchar("authorName", { length: 128 }),
+  name: varchar("name", { length: 128 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 32 }).notNull(), // beef, pork, poultry, etc.
+  method: varchar("method", { length: 32 }).notNull(), // smoke, grill, reverse_sear, etc.
+  meatCut: varchar("meatCut", { length: 128 }),
+  difficulty: varchar("difficulty", { length: 16 }).default("intermediate").notNull(),
+  estimatedTime: varchar("estimatedTime", { length: 32 }),
+  stagesJson: json("stagesJson").notNull(), // array of CookStage objects
+  tipsJson: json("tipsJson"), // array of string tips
+  isPublished: int("isPublished").default(0).notNull(), // 0=private, 1=shared with community
+  forkCount: int("forkCount").default(0).notNull(),
+  forkedFromId: int("forkedFromId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CustomTemplate = typeof customTemplates.$inferSelect;
+export type InsertCustomTemplate = typeof customTemplates.$inferInsert;

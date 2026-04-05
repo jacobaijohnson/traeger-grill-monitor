@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useTraegerStatus } from "@/hooks/useTraeger";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -21,10 +21,7 @@ import {
   Play,
   Square,
   Trash2,
-  Flame,
-  Clock,
-  Thermometer,
-  Wind,
+  X,
   WifiOff,
 } from "lucide-react";
 import { useState } from "react";
@@ -63,43 +60,43 @@ function StageEditor({
 }) {
   return (
     <Card className="bg-secondary/50 border-border">
-      <CardContent className="p-4 space-y-3">
+      <CardContent className="p-3 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
+            <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold font-mono">
               {index + 1}
             </div>
             <Input
               value={stage.name}
               onChange={(e) => onChange({ ...stage, name: e.target.value })}
               placeholder="Stage name (e.g., Smoke Phase)"
-              className="bg-secondary text-foreground max-w-xs"
+              className="bg-background text-foreground max-w-xs text-sm"
             />
           </div>
-          <Button variant="ghost" size="sm" onClick={onRemove} className="text-destructive">
-            <Trash2 className="h-4 w-4" />
+          <Button variant="ghost" size="sm" onClick={onRemove} className="h-6 w-6 p-0 text-destructive">
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <Label className="text-xs text-muted-foreground">Grill Temp (°F)</Label>
+            <Label className="text-xs text-muted-foreground font-mono">Grill Temp (°F)</Label>
             <Input
               type="number"
               value={stage.grillTemp}
               onChange={(e) => onChange({ ...stage, grillTemp: parseInt(e.target.value) || 225 })}
-              className="bg-secondary text-foreground"
+              className="bg-background text-foreground text-sm font-mono"
               min={165}
               max={500}
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Trigger Type</Label>
+            <Label className="text-xs text-muted-foreground font-mono">Trigger</Label>
             <Select
               value={stage.triggerType}
               onValueChange={(v) => onChange({ ...stage, triggerType: v as StageForm["triggerType"] })}
             >
-              <SelectTrigger className="bg-secondary text-foreground">
+              <SelectTrigger className="bg-background text-foreground text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -110,7 +107,7 @@ function StageEditor({
             </Select>
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">
+            <Label className="text-xs text-muted-foreground font-mono">
               {stage.triggerType === "time" ? "Duration (min)" : stage.triggerType === "probe_temp" ? "Target °F" : "N/A"}
             </Label>
             <Input
@@ -123,7 +120,7 @@ function StageEditor({
                   triggerValue: stage.triggerType === "time" ? val * 60 : val,
                 });
               }}
-              className="bg-secondary text-foreground"
+              className="bg-background text-foreground text-sm font-mono"
               disabled={stage.triggerType === "manual"}
             />
           </div>
@@ -133,18 +130,18 @@ function StageEditor({
                 checked={stage.superSmoke}
                 onCheckedChange={(c) => onChange({ ...stage, superSmoke: c })}
               />
-              <Label className="text-xs text-muted-foreground">Super Smoke</Label>
+              <Label className="text-xs text-muted-foreground font-mono">S.Smoke</Label>
             </div>
           </div>
         </div>
 
         <div>
-          <Label className="text-xs text-muted-foreground">Alert Message</Label>
+          <Label className="text-xs text-muted-foreground font-mono">Alert Message</Label>
           <Input
             value={stage.alertMessage}
             onChange={(e) => onChange({ ...stage, alertMessage: e.target.value })}
             placeholder="e.g., Time to wrap the brisket!"
-            className="bg-secondary text-foreground"
+            className="bg-background text-foreground text-sm"
           />
         </div>
       </CardContent>
@@ -225,11 +222,13 @@ export default function Automation() {
       <div className="max-w-lg mx-auto mt-12">
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
-            <WifiOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">No Grill Connected</h2>
-            <p className="text-muted-foreground mb-6">Connect your Traeger account to create automation programs.</p>
-            <Button onClick={() => setLocation("/settings")} className="bg-primary text-primary-foreground">
-              Connect Account
+            <WifiOff className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">No Grill Connected</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Connect your grill account to create automation programs.
+            </p>
+            <Button onClick={() => setLocation("/settings")} className="bg-primary text-primary-foreground font-mono text-xs">
+              go to settings
             </Button>
           </CardContent>
         </Card>
@@ -241,14 +240,14 @@ export default function Automation() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Cook Automation</h1>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Cook Automation</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Create multi-stage cook programs with automatic temperature changes and smart triggers.
           </p>
         </div>
-        <Button onClick={() => setShowBuilder(true)} className="bg-primary text-primary-foreground">
-          <Plus className="h-4 w-4 mr-2" />
-          New Program
+        <Button onClick={() => setShowBuilder(true)} className="bg-primary text-primary-foreground font-mono text-xs">
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
+          new program
         </Button>
       </div>
 
@@ -265,20 +264,20 @@ export default function Automation() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground">{prog.name}</h3>
+                        <h3 className="font-semibold text-foreground text-sm">{prog.name}</h3>
                         {prog.isActive ? (
-                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                            Active - Stage {(prog.currentStage || 0) + 1}
+                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30 font-mono text-xs">
+                            active · stage {(prog.currentStage || 0) + 1}
                           </Badge>
                         ) : null}
                       </div>
                       {prog.description && (
                         <p className="text-xs text-muted-foreground mt-1">{prog.description}</p>
                       )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground font-mono">
                         <span>{parsedStages.length} stages</span>
-                        <span>
-                          {parsedStages.map((s) => `${s.grillTemp}°F`).join(" → ")}
+                        <span className="text-primary/60">
+                          {parsedStages.map((s) => `${s.grillTemp}°`).join(" → ")}
                         </span>
                       </div>
                     </div>
@@ -288,19 +287,20 @@ export default function Automation() {
                           variant="outline"
                           size="sm"
                           onClick={() => stopProgram.mutate({ id: prog.id })}
+                          className="font-mono text-xs"
                         >
-                          <Square className="h-4 w-4 mr-1" />
-                          Stop
+                          <Square className="h-3.5 w-3.5 mr-1.5" />
+                          stop
                         </Button>
                       ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => startProgram.mutate({ id: prog.id })}
-                          className="text-green-400 border-green-500/30"
+                          className="text-green-400 border-green-500/30 font-mono text-xs"
                         >
-                          <Play className="h-4 w-4 mr-1" />
-                          Start
+                          <Play className="h-3.5 w-3.5 mr-1.5" />
+                          start
                         </Button>
                       )}
                       <Button
@@ -311,9 +311,9 @@ export default function Automation() {
                             deleteProgram.mutate({ id: prog.id });
                           }
                         }}
-                        className="text-destructive"
+                        className="text-destructive h-8 w-8 p-0"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -325,12 +325,12 @@ export default function Automation() {
       ) : (
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
-            <Workflow className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground text-sm">
-              No automation programs yet. Create one to automate multi-stage cooks.
+            <Workflow className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-30" />
+            <p className="text-muted-foreground text-sm font-mono">
+              No automation programs yet.
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tip: Browse the Cook Guide for pre-built programs you can customize.
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Create one to automate multi-stage cooks, or browse the Cook Guide for pre-built programs.
             </p>
           </CardContent>
         </Card>
@@ -349,7 +349,7 @@ export default function Automation() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-muted-foreground">Program Name</Label>
+                <Label className="text-xs text-muted-foreground font-mono">Program Name *</Label>
                 <Input
                   value={programName}
                   onChange={(e) => setProgramName(e.target.value)}
@@ -358,7 +358,7 @@ export default function Automation() {
                 />
               </div>
               <div>
-                <Label className="text-muted-foreground">Description (optional)</Label>
+                <Label className="text-xs text-muted-foreground font-mono">Description</Label>
                 <Input
                   value={programDesc}
                   onChange={(e) => setProgramDesc(e.target.value)}
@@ -370,10 +370,10 @@ export default function Automation() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground">Stages</Label>
-                <Button variant="outline" size="sm" onClick={addStage}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Stage
+                <Label className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Stages</Label>
+                <Button variant="outline" size="sm" onClick={addStage} className="font-mono text-xs">
+                  <Plus className="h-3 w-3 mr-1.5" />
+                  add stage
                 </Button>
               </div>
               {stages.map((stage, i) => (
@@ -389,15 +389,15 @@ export default function Automation() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBuilder(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setShowBuilder(false)} className="font-mono text-xs">
+              cancel
             </Button>
             <Button
-              className="bg-primary text-primary-foreground"
+              className="bg-primary text-primary-foreground font-mono text-xs"
               onClick={handleCreate}
               disabled={createProgram.isPending}
             >
-              Create Program
+              {createProgram.isPending ? "creating..." : "create program"}
             </Button>
           </DialogFooter>
         </DialogContent>

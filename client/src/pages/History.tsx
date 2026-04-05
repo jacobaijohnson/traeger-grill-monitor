@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useTraegerStatus } from "@/hooks/useTraeger";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +14,6 @@ import {
   History as HistoryIcon,
   Clock,
   Flame,
-  Thermometer,
   Star,
   WifiOff,
   ChevronRight,
@@ -46,7 +45,7 @@ function StarRating({
         <Star
           key={star}
           className={`h-4 w-4 cursor-pointer transition-colors ${
-            star <= value ? "text-yellow-400 fill-yellow-400" : "text-muted-foreground"
+            star <= value ? "text-amber-400 fill-amber-400" : "text-muted-foreground"
           }`}
           onClick={() => onChange?.(star)}
         />
@@ -104,11 +103,13 @@ export default function History() {
       <div className="max-w-lg mx-auto mt-12">
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
-            <WifiOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">No Grill Connected</h2>
-            <p className="text-muted-foreground mb-6">Connect your Traeger account to view cook history.</p>
-            <Button onClick={() => setLocation("/settings")} className="bg-primary text-primary-foreground">
-              Connect Account
+            <WifiOff className="h-10 w-10 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h2 className="text-lg font-semibold text-foreground mb-2">No Grill Connected</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Connect your grill account to view cook history.
+            </p>
+            <Button onClick={() => setLocation("/settings")} className="bg-primary text-primary-foreground font-mono text-xs">
+              go to settings
             </Button>
           </CardContent>
         </Card>
@@ -119,7 +120,7 @@ export default function History() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Cook History</h1>
+        <h1 className="text-2xl font-bold text-foreground tracking-tight">Cook History</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Review past cooks with temperature graphs, notes, and ratings.
         </p>
@@ -145,7 +146,7 @@ export default function History() {
                         {session.cutName || session.meatType || "Cook Session"}
                       </h3>
                       {session.method && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs font-mono">
                           {session.method}
                         </Badge>
                       )}
@@ -153,16 +154,16 @@ export default function History() {
                         <StarRating value={session.rating} />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {new Date(session.startedAt).toLocaleDateString()}
                       </span>
                       <span>
-                        Duration: {formatDuration(session.startedAt, session.endedAt)}
+                        {formatDuration(session.startedAt, session.endedAt)}
                       </span>
                       {session.templateId && (
-                        <span className="text-primary/60">Template: {session.templateId}</span>
+                        <span className="text-primary/60">tmpl:{session.templateId}</span>
                       )}
                     </div>
                   </div>
@@ -175,9 +176,12 @@ export default function History() {
       ) : (
         <Card className="bg-card border-border">
           <CardContent className="p-8 text-center">
-            <HistoryIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-50" />
-            <p className="text-muted-foreground text-sm">
-              No cook sessions recorded yet. Start a cook from the Dashboard to begin tracking.
+            <HistoryIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-30" />
+            <p className="text-muted-foreground text-sm font-mono">
+              No cook sessions recorded yet.
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Start a cook from the Dashboard to begin tracking.
             </p>
           </CardContent>
         </Card>
@@ -195,23 +199,23 @@ export default function History() {
               </DialogHeader>
 
               <div className="space-y-5">
-                {/* Info */}
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Date</span>
-                    <div className="text-foreground font-medium">
+                {/* Info Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+                    <span className="text-xs text-muted-foreground font-mono uppercase">Date</span>
+                    <div className="text-foreground font-medium text-sm mt-1">
                       {new Date(sessionDetail.startedAt).toLocaleDateString()}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Duration</span>
-                    <div className="text-foreground font-medium">
+                  <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+                    <span className="text-xs text-muted-foreground font-mono uppercase">Duration</span>
+                    <div className="text-foreground font-medium text-sm mt-1">
                       {formatDuration(sessionDetail.startedAt, sessionDetail.endedAt)}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-muted-foreground">Method</span>
-                    <div className="text-foreground font-medium">
+                  <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+                    <span className="text-xs text-muted-foreground font-mono uppercase">Method</span>
+                    <div className="text-foreground font-medium text-sm mt-1">
                       {sessionDetail.method || "N/A"}
                     </div>
                   </div>
@@ -220,37 +224,46 @@ export default function History() {
                 {/* Temperature Graph */}
                 {chartData.length > 0 ? (
                   <div>
-                    <h4 className="text-sm font-semibold text-foreground mb-3">Temperature Graph</h4>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                        <XAxis dataKey="time" stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <YAxis stroke="rgba(255,255,255,0.3)" fontSize={10} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "rgba(23,23,23,0.95)",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: "8px",
-                            fontSize: "11px",
-                          }}
-                        />
-                        <Legend />
-                        <Line type="monotone" dataKey="grill" stroke="#f97316" strokeWidth={2} dot={false} name="Grill" />
-                        <Line type="monotone" dataKey="probe" stroke="#ef4444" strokeWidth={2} dot={false} name="Probe" />
-                        <Line type="monotone" dataKey="ambient" stroke="#60a5fa" strokeWidth={1.5} dot={false} name="Ambient" />
-                        <Line type="stepAfter" dataKey="target" stroke="#a3a3a3" strokeWidth={1} strokeDasharray="5 5" dot={false} name="Target" />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                      <Flame className="h-3.5 w-3.5 text-primary" />
+                      Temperature Graph
+                    </h4>
+                    <div className="p-3 rounded-lg bg-secondary/30 border border-border">
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                          <XAxis dataKey="time" stroke="rgba(255,255,255,0.25)" fontSize={10} fontFamily="monospace" />
+                          <YAxis stroke="rgba(255,255,255,0.25)" fontSize={10} fontFamily="monospace" />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(220 15% 12%)",
+                              border: "1px solid hsl(220 10% 20%)",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              fontFamily: "monospace",
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "11px", fontFamily: "monospace" }} />
+                          <Line type="monotone" dataKey="grill" stroke="hsl(28 90% 55%)" strokeWidth={2} dot={false} name="Grill" />
+                          <Line type="monotone" dataKey="probe" stroke="hsl(0 80% 60%)" strokeWidth={2} dot={false} name="Probe" />
+                          <Line type="monotone" dataKey="ambient" stroke="hsl(210 60% 60%)" strokeWidth={1.5} dot={false} name="Ambient" />
+                          <Line type="stepAfter" dataKey="target" stroke="hsl(220 10% 50%)" strokeWidth={1} strokeDasharray="5 5" dot={false} name="Target" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
+                  <div className="text-center py-8 text-muted-foreground text-sm font-mono">
                     No telemetry data recorded for this session.
                   </div>
                 )}
 
                 {/* Notes & Rating */}
                 <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-foreground">Notes & Rating</h4>
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Star className="h-3.5 w-3.5 text-amber-400" />
+                    Notes & Rating
+                  </h4>
                   <StarRating value={rating} onChange={setRating} />
                   <Textarea
                     value={notes}
@@ -269,8 +282,9 @@ export default function History() {
                       });
                     }}
                     disabled={updateNotes.isPending}
+                    className="font-mono text-xs"
                   >
-                    Save Notes
+                    save notes
                   </Button>
                 </div>
               </div>

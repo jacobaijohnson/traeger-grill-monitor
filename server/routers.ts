@@ -40,6 +40,15 @@ import {
 } from "./db";
 import { COMMANDS } from "@shared/traeger-types";
 import { COOK_TEMPLATES } from "@shared/cook-templates";
+import {
+  connectMqtt,
+  disconnectMqtt,
+  getTelemetry,
+  getTelemetryHistory,
+  isMqttConnected,
+  needsUrlRefresh,
+  refreshMqttUrl,
+} from "./mqtt-manager";
 
 // Helper to get valid Traeger idToken, refreshing if needed.
 // The Traeger API uses idToken (not accessToken) for authorization.
@@ -244,6 +253,55 @@ export const appRouter = router({
       const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
       return traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);
+    }),
+
+    // Get live telemetry from MQTT cache (auto-connects MQTT if needed)
+    telemetry: protectedProcedure.query(async ({ ctx }) => {
+      const { idToken, session } = await getValidIdToken(ctx.user.id);
+      if (!session.selectedGrillId) {
+        return { connected: false, mqttConnected: false, lastUpdate: 0, grill: 0, set: 0, ambient: 0, pelletLevel: 0, systemStatus: 99, probe: 0, probeSet: 0, probeCon: 0, probeAlarmFired: 0, keepwarm: 0, smoke: 0, units: 1, cookTimerStart: 0, cookTimerEnd: 0, acc: [] };
+      }
+
+      // Ensure MQTT is connected
+      if (!isMqttConnected(ctx.user.id) || needsUrlRefresh(ctx.user.id)) {
+        try {
+          const creds = await traegerGetMqttCredentials(idToken, session.selectedGrillId);
+          const expiresAt = Date.now() + creds.expirationSeconds * 1000;
+          if (needsUrlRefresh(ctx.user.id)) {
+            refreshMqttUrl(ctx.user.id, session.selectedGrillId, creds.signedUrl, expiresAt);
+          } else {
+            connectMqtt(ctx.user.id, session.selectedGrillId, creds.signedUrl, expiresAt);
+          }
+          // Send status request to trigger the grill to publish its state
+          try {
+            await traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);
+          } catch { /* non-critical */ }
+        } catch (err) {
+          console.error("[Telemetry] Failed to connect MQTT:", err);
+        }
+      }
+
+      const cached = getTelemetry(ctx.user.id);
+      if (cached) return cached;
+
+      // No cached data yet, return defaults
+      return { connected: false, mqttConnected: false, lastUpdate: 0, grill: 0, set: 0, ambient: 0, pelletLevel: 0, systemStatus: 99, probe: 0, probeSet: 0, probeCon: 0, probeAlarmFired: 0, keepwarm: 0, smoke: 0, units: 1, cookTimerStart: 0, cookTimerEnd: 0, acc: [] };
+    }),
+
+    // Get telemetry history for charting
+    telemetryHistory: protectedProcedure.query(async ({ ctx }) => {
+      const history = getTelemetryHistory(ctx.user.id);
+      return history.map(h => ({
+        timestamp: h.timestamp,
+        grill: h.grill,
+        probe: h.probe,
+        ambient: h.ambient,
+        set: h.set,
+        pelletLevel: h.pelletLevel,
+        systemStatus: h.systemStatus,
+        smoke: h.smoke,
+        keepwarm: h.keepwarm,
+      }));
     }),
   }),
 

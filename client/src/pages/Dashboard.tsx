@@ -1,5 +1,4 @@
-import { useTraegerStatus, useTelemetryState, useGrillCommands } from "@/hooks/useTraeger";
-import { trpc } from "@/lib/trpc";
+import { useTraegerStatus, useLiveTelemetry, useTelemetryHistory, useGrillCommands } from "@/hooks/useTraeger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +17,7 @@ import {
   Gauge,
 } from "lucide-react";
 import { getSystemStatus } from "@shared/traeger-types";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -154,26 +153,9 @@ function CookTimer({ start, end }: { start: number; end: number }) {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: status, isLoading: statusLoading } = useTraegerStatus();
-  const { telemetry, history } = useTelemetryState();
+  const { data: telemetry, isLoading: telemetryLoading } = useLiveTelemetry();
+  const { chartData } = useTelemetryHistory();
   const commands = useGrillCommands();
-
-  useEffect(() => {
-    if (!status?.connected || !status?.selectedGrillId) return;
-    const interval = setInterval(() => {
-      commands.requestStatus.mutate();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [status?.connected, status?.selectedGrillId]);
-
-  const chartData = useMemo(() => {
-    return history.map((h) => ({
-      time: new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      grill: h.grill > 0 ? h.grill : undefined,
-      probe: h.probe > 0 ? h.probe : undefined,
-      ambient: h.ambient > 0 ? h.ambient : undefined,
-      target: h.set > 0 ? h.set : undefined,
-    }));
-  }, [history]);
 
   if (statusLoading) {
     return (
@@ -230,10 +212,20 @@ export default function Dashboard() {
     );
   }
 
-  // Connected state
+  // Use telemetry data from server-side MQTT cache
+  const t = telemetry || {
+    grill: 0, set: 0, ambient: 0, pelletLevel: 0, connected: false,
+    systemStatus: 99, probe: 0, probeSet: 0, keepwarm: 0, smoke: 0,
+    cookTimerStart: 0, cookTimerEnd: 0, mqttConnected: false, lastUpdate: 0,
+  };
+
   const selectedGrill = status.grills?.find(
     (g: { thingName: string }) => g.thingName === status.selectedGrillId
   );
+
+  const mqttConnected = 'mqttConnected' in t && t.mqttConnected;
+  const lastUpdate = 'lastUpdate' in t ? (t.lastUpdate as number) : 0;
+  const timeSinceUpdate = lastUpdate > 0 ? Math.floor((Date.now() - lastUpdate) / 1000) : -1;
 
   return (
     <div className="space-y-6">
@@ -244,15 +236,27 @@ export default function Dashboard() {
             {selectedGrill?.friendlyName || "My Grill"}
           </h1>
           <div className="flex items-center gap-2 mt-1">
-            <StatusBadge code={telemetry.systemStatus} />
-            {telemetry.connected ? (
+            <StatusBadge code={t.systemStatus} />
+            {mqttConnected ? (
               <div className="flex items-center gap-1 text-xs text-green-400 font-mono">
-                <Wifi className="h-3 w-3" /> online
+                <Wifi className="h-3 w-3" /> live
+                {timeSinceUpdate >= 0 && (
+                  <span className="text-muted-foreground ml-1">
+                    ({timeSinceUpdate < 60 ? `${timeSinceUpdate}s ago` : `${Math.floor(timeSinceUpdate / 60)}m ago`})
+                  </span>
+                )}
+              </div>
+            ) : t.connected ? (
+              <div className="flex items-center gap-1 text-xs text-amber-400 font-mono">
+                <Wifi className="h-3 w-3" /> connecting...
               </div>
             ) : (
               <div className="flex items-center gap-1 text-xs text-muted-foreground font-mono">
-                <WifiOff className="h-3 w-3" /> waiting...
+                <WifiOff className="h-3 w-3" /> connecting to grill...
               </div>
+            )}
+            {telemetryLoading && (
+              <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
             )}
           </div>
         </div>
@@ -288,10 +292,10 @@ export default function Dashboard() {
 
       {/* Temperature Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <TempCard label="Grill" value={telemetry.grill} target={telemetry.set} icon={Flame} color="text-primary" />
-        <TempCard label="Probe" value={telemetry.probe} target={telemetry.probeSet} icon={Thermometer} color="text-red-400" />
-        <PelletGauge level={telemetry.pelletLevel} />
-        <CookTimer start={telemetry.cookTimerStart} end={telemetry.cookTimerEnd} />
+        <TempCard label="Grill" value={t.grill} target={t.set} icon={Flame} color="text-primary" />
+        <TempCard label="Probe" value={t.probe} target={t.probeSet} icon={Thermometer} color="text-red-400" />
+        <PelletGauge level={t.pelletLevel} />
+        <CookTimer start={t.cookTimerStart} end={t.cookTimerEnd} />
       </div>
 
       {/* Quick Controls */}
@@ -306,26 +310,26 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              className={`font-mono text-xs ${telemetry.smoke ? "border-primary text-primary bg-primary/10" : ""}`}
+              className={`font-mono text-xs ${t.smoke ? "border-primary text-primary bg-primary/10" : ""}`}
               onClick={() => {
-                commands.setSuperSmoke.mutate({ enabled: !telemetry.smoke });
-                toast.info(telemetry.smoke ? "Super Smoke OFF" : "Super Smoke ON");
+                commands.setSuperSmoke.mutate({ enabled: !t.smoke });
+                toast.info(t.smoke ? "Super Smoke OFF" : "Super Smoke ON");
               }}
             >
               <Wind className="h-3.5 w-3.5 mr-1.5" />
-              super smoke {telemetry.smoke ? "on" : "off"}
+              super smoke {t.smoke ? "on" : "off"}
             </Button>
             <Button
               variant="outline"
               size="sm"
-              className={`font-mono text-xs ${telemetry.keepwarm ? "border-primary text-primary bg-primary/10" : ""}`}
+              className={`font-mono text-xs ${t.keepwarm ? "border-primary text-primary bg-primary/10" : ""}`}
               onClick={() => {
-                commands.setKeepWarm.mutate({ enabled: !telemetry.keepwarm });
-                toast.info(telemetry.keepwarm ? "Keep Warm OFF" : "Keep Warm ON");
+                commands.setKeepWarm.mutate({ enabled: !t.keepwarm });
+                toast.info(t.keepwarm ? "Keep Warm OFF" : "Keep Warm ON");
               }}
             >
               <Flame className="h-3.5 w-3.5 mr-1.5" />
-              keep warm {telemetry.keepwarm ? "on" : "off"}
+              keep warm {t.keepwarm ? "on" : "off"}
             </Button>
             <Button variant="outline" size="sm" onClick={() => setLocation("/controls")} className="font-mono text-xs">
               all controls
@@ -377,7 +381,10 @@ export default function Dashboard() {
           ) : (
             <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
               <Thermometer className="h-8 w-8 mb-2 opacity-30" />
-              <p className="text-sm font-mono">Waiting for telemetry data...</p>
+              <p className="text-sm font-mono">
+                {mqttConnected ? "Collecting telemetry data..." : "Connecting to grill MQTT stream..."}
+              </p>
+              <p className="text-xs mt-1 opacity-60">Data will appear once the grill publishes its state</p>
             </div>
           )}
         </CardContent>
@@ -393,7 +400,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold font-mono text-blue-400">
-                {telemetry.ambient > 0 ? telemetry.ambient : "--"}
+                {t.ambient > 0 ? t.ambient : "--"}
               </span>
               <span className="text-sm text-muted-foreground">°F</span>
             </div>
@@ -403,16 +410,16 @@ export default function Dashboard() {
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-2">Status</div>
             <div className="text-sm text-muted-foreground mb-2">
-              {getSystemStatus(telemetry.systemStatus).description}
+              {getSystemStatus(t.systemStatus).description}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <StatusBadge code={telemetry.systemStatus} />
-              {telemetry.smoke ? (
+              <StatusBadge code={t.systemStatus} />
+              {t.smoke ? (
                 <Badge variant="outline" className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs font-mono">
                   Super Smoke
                 </Badge>
               ) : null}
-              {telemetry.keepwarm ? (
+              {t.keepwarm ? (
                 <Badge variant="outline" className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-mono">
                   Keep Warm
                 </Badge>

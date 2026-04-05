@@ -12,8 +12,8 @@ type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 function createAuthContext(): { ctx: TrpcContext; clearedCookies: Array<{ name: string; options: Record<string, unknown> }> } {
   const clearedCookies: Array<{ name: string; options: Record<string, unknown> }> = [];
   const user: AuthenticatedUser = {
-    id: 1,
-    openId: "test-user-123",
+    id: 99999,
+    openId: "test-user-99999",
     email: "test@example.com",
     name: "Test User",
     loginMethod: "manus",
@@ -224,7 +224,7 @@ describe("auth.me", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.auth.me();
     expect(result).not.toBeNull();
-    expect(result?.openId).toBe("test-user-123");
+    expect(result?.openId).toBe("test-user-99999");
     expect(result?.email).toBe("test@example.com");
   });
 

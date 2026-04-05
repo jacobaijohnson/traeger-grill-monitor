@@ -110,3 +110,13 @@
 - [ ] Pellet consumption tracking over time
 - [ ] Export cook session data as CSV
 - [ ] Mobile-responsive optimizations
+
+## Bug Fixes (Active)
+- [x] Fix dashboard showing "Offline waiting..." — added server-side MQTT manager with live telemetry cache
+- [x] Add grill.telemetry tRPC query backed by server-side MQTT cache (auto-connects MQTT)
+- [x] Add grill.telemetryHistory tRPC query for charting from MQTT history buffer
+- [x] Implement adaptive polling (10s cooking, 20s cooling, 30s idle)
+- [x] Wire Dashboard to poll live telemetry with MQTT connection status display
+- [x] Auto-refresh MQTT signed URL before expiry
+- [ ] Tighten Cook Guide → Automation flow (Start Cook button creates and launches automation)
+- [ ] Merge Cook Guide and Automation into unified workflow

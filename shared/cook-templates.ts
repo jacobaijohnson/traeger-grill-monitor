@@ -1,0 +1,366 @@
+import type { CookTemplate } from "./traeger-types";
+
+export const COOK_TEMPLATES: CookTemplate[] = [
+  // ===== BEEF =====
+  {
+    id: "brisket-classic",
+    name: "Classic Brisket",
+    category: "beef",
+    method: "smoke",
+    cut: "Whole Packer Brisket",
+    description: "Low and slow smoked brisket with the Texas crutch wrap method. Expect 12-20 hours for a full packer.",
+    estimatedTime: "1.5 hrs/lb",
+    weightBased: true,
+    timePerPound: 90,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 165, superSmoke: true, alertMessage: "Bark has formed. Time to wrap in butcher paper or foil!" },
+      { name: "Wrapped Cook", grillTemp: 250, triggerType: "probe_temp", triggerValue: 203, superSmoke: false, alertMessage: "Brisket is probe-tender! Pull and rest in a cooler for 1-4 hours." },
+      { name: "Hold/Rest", grillTemp: 160, triggerType: "manual", triggerValue: 0, superSmoke: false, alertMessage: "Holding at 160°F. Rest at least 1 hour before slicing." },
+    ],
+    tips: [
+      "Trim fat cap to 1/4 inch for best bark formation",
+      "Spritz with apple cider vinegar every 90 minutes during smoke phase",
+      "The stall at 150-170°F is normal and can last 2-4 hours",
+      "Brisket is done when a probe slides in like butter, not just by temperature",
+      "Rest in a cooler wrapped in towels for at least 1 hour, up to 4 hours",
+    ],
+  },
+  {
+    id: "beef-ribs",
+    name: "Beef Short Ribs",
+    category: "beef",
+    method: "smoke",
+    cut: "Beef Short Ribs (Plate)",
+    description: "Massive, beefy short ribs smoked until fall-apart tender. Often called 'brisket on a stick'.",
+    estimatedTime: "6-8 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 250, triggerType: "probe_temp", triggerValue: 170, superSmoke: true, alertMessage: "Bark is set. Consider wrapping for faster cook." },
+      { name: "Finish", grillTemp: 250, triggerType: "probe_temp", triggerValue: 203, superSmoke: false, alertMessage: "Ribs are probe-tender! Rest 30 minutes before serving." },
+    ],
+    tips: [
+      "Season heavily - these are big cuts that can handle bold seasoning",
+      "No need to wrap if you have time - unwrapped produces better bark",
+      "Look for plate ribs with thick meat above the bone",
+    ],
+  },
+  {
+    id: "tri-tip-reverse-sear",
+    name: "Reverse Sear Tri-Tip",
+    category: "beef",
+    method: "reverse_sear",
+    cut: "Tri-Tip",
+    description: "Smoked low to build flavor, then seared at high heat for a perfect crust.",
+    estimatedTime: "2-3 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 120, superSmoke: true, alertMessage: "Pull tri-tip! Crank grill to 450°F for searing." },
+      { name: "Sear", grillTemp: 450, triggerType: "time", triggerValue: 300, superSmoke: false, alertMessage: "Grill is hot. Sear tri-tip 2-3 minutes per side." },
+    ],
+    tips: [
+      "Slice against the grain - tri-tip has two grain directions",
+      "Pull 10-15°F below your target doneness for carryover",
+      "Let rest 10 minutes after searing before slicing",
+    ],
+  },
+  {
+    id: "prime-rib",
+    name: "Smoked Prime Rib",
+    category: "beef",
+    method: "roast",
+    cut: "Standing Rib Roast",
+    description: "Smoke-kissed prime rib roasted to medium-rare perfection.",
+    estimatedTime: "15 min/lb",
+    weightBased: true,
+    timePerPound: 15,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 115, superSmoke: true, alertMessage: "Smoke phase complete. Crank to 450°F for crust." },
+      { name: "Sear/Crust", grillTemp: 450, triggerType: "probe_temp", triggerValue: 130, superSmoke: false, alertMessage: "Prime rib is at medium-rare! Pull and rest 20 minutes." },
+    ],
+    tips: [
+      "Remove from fridge 2 hours before cooking for even cooking",
+      "Season generously with salt the night before",
+      "Final temp of 130°F gives perfect medium-rare after resting",
+    ],
+  },
+  // ===== STEAK =====
+  {
+    id: "steak-reverse-sear",
+    name: "Reverse Sear Steak",
+    category: "beef",
+    method: "reverse_sear",
+    cut: "Ribeye / NY Strip (1.5\"+ thick)",
+    description: "The ultimate steak method for thick cuts. Low smoke for flavor, then blazing hot sear for crust.",
+    estimatedTime: "45-75 min",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 115, superSmoke: true, alertMessage: "Steaks at 115°F. Pull them off! Crank grill to max (450°F+)." },
+      { name: "Sear", grillTemp: 450, triggerType: "time", triggerValue: 300, superSmoke: false, alertMessage: "Grill is screaming hot. Sear 1-2 min per side. Don't walk away!" },
+    ],
+    tips: [
+      "Best for steaks 1.5 inches or thicker",
+      "Pat steaks completely dry before searing for best crust",
+      "Pull at 115°F for medium-rare (carryover brings to 130°F)",
+      "Rest 5-8 minutes after searing",
+    ],
+  },
+  {
+    id: "steak-direct-grill",
+    name: "Direct Grilled Steak",
+    category: "beef",
+    method: "grill",
+    cut: "Any Steak (3/4\" - 1.5\")",
+    description: "Classic high-heat grilling for steaks under 1.5 inches thick.",
+    estimatedTime: "10-20 min",
+    weightBased: false,
+    stages: [
+      { name: "Grill", grillTemp: 450, triggerType: "probe_temp", triggerValue: 130, superSmoke: false, alertMessage: "Steak is at medium-rare! Pull and rest 5 minutes." },
+    ],
+    tips: [
+      "Preheat grill for 15 minutes at 450°F before cooking",
+      "Flip only once for best grill marks",
+      "Use the hand test: 3 seconds = medium-high heat",
+    ],
+  },
+  // ===== PORK =====
+  {
+    id: "pulled-pork",
+    name: "Pulled Pork",
+    category: "pork",
+    method: "smoke",
+    cut: "Pork Butt (Boston Butt)",
+    description: "The quintessential low-and-slow cook. Fork-tender pulled pork for sandwiches, tacos, or nachos.",
+    estimatedTime: "1.5 hrs/lb",
+    weightBased: true,
+    timePerPound: 90,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 160, superSmoke: true, alertMessage: "Time to wrap! Use foil or butcher paper with a splash of apple juice." },
+      { name: "Wrapped Cook", grillTemp: 250, triggerType: "probe_temp", triggerValue: 203, superSmoke: false, alertMessage: "Pork butt is done! Rest 1-2 hours, then pull with forks or claws." },
+    ],
+    tips: [
+      "Don't trim the fat cap - it bastes the meat during cooking",
+      "The stall at 150-170°F is normal for large cuts",
+      "Wrapping speeds through the stall and keeps moisture in",
+      "Rest in a cooler for at least 1 hour for best results",
+      "Save the drippings to mix back into the pulled pork",
+    ],
+  },
+  {
+    id: "baby-back-ribs-321",
+    name: "3-2-1 Baby Back Ribs",
+    category: "pork",
+    method: "smoke",
+    cut: "Baby Back Ribs",
+    description: "The classic 3-2-1 method: 3 hours smoke, 2 hours wrapped, 1 hour sauced.",
+    estimatedTime: "6 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke (Unwrapped)", grillTemp: 225, triggerType: "time", triggerValue: 10800, superSmoke: true, alertMessage: "3 hours done! Wrap ribs in foil with butter, brown sugar, and honey." },
+      { name: "Wrapped Steam", grillTemp: 225, triggerType: "time", triggerValue: 7200, superSmoke: false, alertMessage: "2 hours wrapped! Unwrap, apply your favorite BBQ sauce." },
+      { name: "Sauce & Set", grillTemp: 275, triggerType: "time", triggerValue: 3600, superSmoke: false, alertMessage: "Ribs are done! Sauce has caramelized. Let rest 10 minutes." },
+    ],
+    tips: [
+      "Remove the membrane from the back of the ribs before seasoning",
+      "For baby backs, consider 2-2-1 if you prefer more bite",
+      "The bend test: pick up ribs with tongs - they should crack but not fall apart",
+      "Bump to 275°F in the final hour for better sauce caramelization",
+    ],
+  },
+  {
+    id: "spare-ribs-321",
+    name: "3-2-1 Spare Ribs",
+    category: "pork",
+    method: "smoke",
+    cut: "St. Louis Style Spare Ribs",
+    description: "Meatier spare ribs using the full 3-2-1 method for fall-off-the-bone tenderness.",
+    estimatedTime: "6-7 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke (Unwrapped)", grillTemp: 225, triggerType: "time", triggerValue: 10800, superSmoke: true, alertMessage: "3 hours done! Wrap ribs in foil with liquid." },
+      { name: "Wrapped Steam", grillTemp: 225, triggerType: "time", triggerValue: 7200, superSmoke: false, alertMessage: "Unwrap and sauce the ribs!" },
+      { name: "Sauce & Set", grillTemp: 275, triggerType: "time", triggerValue: 3600, superSmoke: false, alertMessage: "Spare ribs are done! Rest 10 minutes." },
+    ],
+    tips: [
+      "Spare ribs are larger and meatier than baby backs - they can handle the full 3-2-1",
+      "Trim the rib tips for St. Louis style presentation",
+    ],
+  },
+  {
+    id: "pork-loin",
+    name: "Smoked Pork Loin",
+    category: "pork",
+    method: "smoke",
+    cut: "Pork Loin",
+    description: "Lean and flavorful smoked pork loin. Pull early to avoid drying out.",
+    estimatedTime: "4-5 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 141, superSmoke: true, alertMessage: "Pull pork loin NOW! Carryover will bring it to 145°F. Rest 10 minutes." },
+    ],
+    tips: [
+      "Pork loin is very lean - do NOT overcook past 145°F",
+      "Brine for 4-12 hours before smoking for extra moisture",
+      "Pull at 141°F and let carryover bring to 145°F",
+    ],
+  },
+  // ===== POULTRY =====
+  {
+    id: "whole-chicken",
+    name: "Smoked Whole Chicken",
+    category: "poultry",
+    method: "roast",
+    cut: "Whole Chicken (3-5 lbs)",
+    description: "Smoke-kissed whole chicken with crispy skin. Higher temp prevents rubbery skin.",
+    estimatedTime: "2-3 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke Phase", grillTemp: 225, triggerType: "time", triggerValue: 3600, superSmoke: true, alertMessage: "1 hour of smoke done. Raising temp for crispy skin." },
+      { name: "Crisp Phase", grillTemp: 350, triggerType: "probe_temp", triggerValue: 165, superSmoke: false, alertMessage: "Chicken is done! Internal temp 165°F. Rest 15 minutes." },
+    ],
+    tips: [
+      "Spatchcock (butterfly) the chicken for more even cooking",
+      "Pat skin completely dry and rub with oil for crispiest skin",
+      "Check temp in the thickest part of the thigh",
+      "Low temp for too long = rubbery skin. Keep smoke phase to 1 hour max.",
+    ],
+  },
+  {
+    id: "smoked-wings",
+    name: "Smoked & Crisped Wings",
+    category: "poultry",
+    method: "smoke",
+    cut: "Chicken Wings",
+    description: "Smoke low for flavor, then crank heat for crispy skin.",
+    estimatedTime: "1.5-2 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "time", triggerValue: 2700, superSmoke: true, alertMessage: "45 min smoke done. Cranking to 400°F for crispy skin!" },
+      { name: "Crisp", grillTemp: 400, triggerType: "probe_temp", triggerValue: 185, superSmoke: false, alertMessage: "Wings are crispy and done! Toss in sauce and serve." },
+    ],
+    tips: [
+      "Pat wings very dry and toss with baking powder for extra crisp",
+      "Toss in sauce AFTER crisping, not before",
+      "185°F in wings is fine - the collagen needs to break down",
+    ],
+  },
+  {
+    id: "smoked-turkey",
+    name: "Smoked Whole Turkey",
+    category: "poultry",
+    method: "roast",
+    cut: "Whole Turkey (10-14 lbs)",
+    description: "Smoke-flavored turkey with crispy skin. Keep to 14 lbs or under for food safety.",
+    estimatedTime: "4-5 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke Phase", grillTemp: 225, triggerType: "time", triggerValue: 3600, superSmoke: true, alertMessage: "1 hour smoke done. Raising temp for even cooking and crispy skin." },
+      { name: "Roast Phase", grillTemp: 325, triggerType: "probe_temp", triggerValue: 165, superSmoke: false, alertMessage: "Turkey is done! Rest 30 minutes before carving." },
+    ],
+    tips: [
+      "Keep turkey under 14 lbs to avoid the danger zone",
+      "Brine for 12-24 hours for juiciest results",
+      "Check breast AND thigh temps - thigh should reach 170°F",
+      "Tent with foil if skin gets too dark before meat is done",
+    ],
+  },
+  // ===== LAMB =====
+  {
+    id: "lamb-leg",
+    name: "Smoked Leg of Lamb",
+    category: "lamb",
+    method: "smoke",
+    cut: "Bone-In Leg of Lamb",
+    description: "Smoky, herbaceous leg of lamb cooked to medium for best flavor.",
+    estimatedTime: "4-8 hours",
+    weightBased: true,
+    timePerPound: 45,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 140, superSmoke: true, alertMessage: "Lamb leg is at medium! Pull and rest 20 minutes." },
+    ],
+    tips: [
+      "Stud with garlic cloves and fresh rosemary before smoking",
+      "Lamb fat renders beautifully at low temps",
+      "Medium (140°F) is ideal for leg - don't overcook",
+    ],
+  },
+  {
+    id: "lamb-rack",
+    name: "Smoked Rack of Lamb",
+    category: "lamb",
+    method: "reverse_sear",
+    cut: "Rack of Lamb",
+    description: "Elegant rack of lamb with smoke flavor and a seared crust.",
+    estimatedTime: "1.5 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 120, superSmoke: true, alertMessage: "Pull rack! Crank to 450°F for searing." },
+      { name: "Sear", grillTemp: 450, triggerType: "time", triggerValue: 300, superSmoke: false, alertMessage: "Sear 1-2 min per side. Rest 10 minutes before cutting." },
+    ],
+    tips: [
+      "French the bones for elegant presentation",
+      "Herb crust: Dijon mustard + breadcrumbs + herbs after searing",
+    ],
+  },
+  // ===== SEAFOOD =====
+  {
+    id: "smoked-salmon",
+    name: "Smoked Salmon",
+    category: "seafood",
+    method: "smoke",
+    cut: "Salmon Fillet",
+    description: "Delicate hot-smoked salmon with a beautiful pellicle.",
+    estimatedTime: "1-1.5 hours",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 220, triggerType: "probe_temp", triggerValue: 145, superSmoke: true, alertMessage: "Salmon is done! It should flake easily with a fork." },
+    ],
+    tips: [
+      "Dry brine with salt and brown sugar for 4-12 hours",
+      "Let pellicle form by air-drying 1-2 hours before smoking",
+      "Don't go above 225°F or the albumin (white stuff) will push out",
+    ],
+  },
+  {
+    id: "smoked-lobster",
+    name: "Smoked Lobster Tails",
+    category: "seafood",
+    method: "smoke",
+    cut: "Lobster Tails",
+    description: "Butter-basted smoked lobster tails. Quick and impressive.",
+    estimatedTime: "45 min",
+    weightBased: false,
+    stages: [
+      { name: "Smoke", grillTemp: 225, triggerType: "probe_temp", triggerValue: 140, superSmoke: true, alertMessage: "Lobster tails are done! Serve immediately with drawn butter." },
+    ],
+    tips: [
+      "Butterfly the tails and baste with garlic butter every 15 minutes",
+      "Don't overcook - lobster gets rubbery fast",
+    ],
+  },
+];
+
+// Category metadata for UI
+export const CATEGORIES = [
+  { id: "beef", label: "Beef", emoji: "🥩" },
+  { id: "pork", label: "Pork", emoji: "🐖" },
+  { id: "poultry", label: "Poultry", emoji: "🍗" },
+  { id: "lamb", label: "Lamb", emoji: "🐑" },
+  { id: "seafood", label: "Seafood", emoji: "🐟" },
+] as const;
+
+export const COOKING_METHODS = [
+  { id: "smoke", label: "Low & Slow Smoke", description: "180-250°F, hours-long cooks" },
+  { id: "grill", label: "Direct Grill", description: "350-450°F, quick cooks" },
+  { id: "reverse_sear", label: "Reverse Sear", description: "Low smoke then high-heat sear" },
+  { id: "roast", label: "Roast", description: "300-375°F, moderate duration" },
+  { id: "bake", label: "Bake", description: "325-425°F, consistent temp" },
+] as const;
+
+// Doneness levels for steaks
+export const DONENESS_LEVELS = [
+  { id: "rare", label: "Rare", pullTemp: 120, finalTemp: 125, color: "#dc2626" },
+  { id: "medium_rare", label: "Medium Rare", pullTemp: 130, finalTemp: 135, color: "#ea580c" },
+  { id: "medium", label: "Medium", pullTemp: 140, finalTemp: 145, color: "#d97706" },
+  { id: "medium_well", label: "Medium Well", pullTemp: 150, finalTemp: 155, color: "#ca8a04" },
+  { id: "well_done", label: "Well Done", pullTemp: 160, finalTemp: 165, color: "#78716c" },
+] as const;

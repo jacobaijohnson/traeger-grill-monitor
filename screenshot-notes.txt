@@ -1,0 +1,8 @@
+Screenshot 1 - Dashboard (no grill connected):
+- Dark theme working correctly with orange accent
+- Sidebar navigation showing all 6 pages: Dashboard, Controls, Cook Guide, Automation, History, Settings
+- "No Traeger Account Connected" card with CTA button
+- "What you'll get" feature cards showing: Live Temperature, Grill Controls, Cook Automation, Pellet Tracking
+- User profile showing at bottom of sidebar
+- Clean, functional layout
+- 0 TypeScript errors

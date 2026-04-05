@@ -1,17 +1,7 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, json, float } from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +15,76 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+// Traeger credential sessions (encrypted server-side)
+export const traegerSessions = mysqlTable("traeger_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  traegerEmail: varchar("traegerEmail", { length: 320 }).notNull(),
+  accessToken: text("accessToken").notNull(),
+  idToken: text("idToken").notNull(),
+  refreshToken: text("refreshToken").notNull(),
+  expiresAt: bigint("expiresAt", { mode: "number" }).notNull(),
+  selectedGrillId: varchar("selectedGrillId", { length: 128 }),
+  grillsJson: json("grillsJson"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TraegerSession = typeof traegerSessions.$inferSelect;
+export type InsertTraegerSession = typeof traegerSessions.$inferInsert;
+
+// Telemetry readings (time-series data)
+export const telemetryReadings = mysqlTable("telemetry_readings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  grillId: varchar("grillId", { length: 128 }).notNull(),
+  cookSessionId: int("cookSessionId"),
+  grillTemp: float("grillTemp").notNull(),
+  probeTemp: float("probeTemp"),
+  ambientTemp: float("ambientTemp"),
+  targetTemp: float("targetTemp"),
+  pelletLevel: int("pelletLevel"),
+  systemStatus: int("systemStatus"),
+  recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+});
+
+export type TelemetryReading = typeof telemetryReadings.$inferSelect;
+export type InsertTelemetryReading = typeof telemetryReadings.$inferInsert;
+
+// Cook sessions (grouping telemetry into discrete cooks)
+export const cookSessions = mysqlTable("cook_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  grillId: varchar("grillId", { length: 128 }).notNull(),
+  templateId: varchar("templateId", { length: 64 }),
+  meatType: varchar("meatType", { length: 64 }),
+  cutName: varchar("cutName", { length: 128 }),
+  method: varchar("method", { length: 32 }),
+  notes: text("notes"),
+  rating: int("rating"),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  endedAt: timestamp("endedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CookSession = typeof cookSessions.$inferSelect;
+export type InsertCookSession = typeof cookSessions.$inferInsert;
+
+// Automation programs (multi-stage cook programs)
+export const automationPrograms = mysqlTable("automation_programs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 128 }).notNull(),
+  description: text("description"),
+  templateId: varchar("templateId", { length: 64 }),
+  stagesJson: json("stagesJson").notNull(),
+  isActive: int("isActive").default(0).notNull(),
+  currentStage: int("currentStage").default(0).notNull(),
+  cookSessionId: int("cookSessionId"),
+  startedAt: timestamp("startedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AutomationProgram = typeof automationPrograms.$inferSelect;
+export type InsertAutomationProgram = typeof automationPrograms.$inferInsert;

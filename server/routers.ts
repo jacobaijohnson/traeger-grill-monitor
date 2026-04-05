@@ -34,8 +34,9 @@ import {
 import { COMMANDS } from "@shared/traeger-types";
 import { COOK_TEMPLATES } from "@shared/cook-templates";
 
-// Helper to get valid Traeger access token, refreshing if needed
-async function getValidAccessToken(userId: number): Promise<{ accessToken: string; session: NonNullable<Awaited<ReturnType<typeof getTraegerSession>>> }> {
+// Helper to get valid Traeger idToken, refreshing if needed.
+// The Traeger API uses idToken (not accessToken) for authorization.
+async function getValidIdToken(userId: number): Promise<{ idToken: string; session: NonNullable<Awaited<ReturnType<typeof getTraegerSession>>> }> {
   const session = await getTraegerSession(userId);
   if (!session) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No Traeger account linked. Please connect your Traeger account first." });
@@ -47,13 +48,13 @@ async function getValidAccessToken(userId: number): Promise<{ accessToken: strin
       const tokens = await traegerRefreshTokens(session.refreshToken);
       const expiresAt = Date.now() + tokens.expiresIn * 1000;
       await updateTraegerSessionTokens(userId, tokens.accessToken, tokens.idToken, tokens.refreshToken, expiresAt);
-      return { accessToken: tokens.accessToken, session: { ...session, accessToken: tokens.accessToken } };
+      return { idToken: tokens.idToken, session: { ...session, idToken: tokens.idToken } };
     } catch {
       throw new TRPCError({ code: "UNAUTHORIZED", message: "Traeger session expired. Please reconnect your account." });
     }
   }
 
-  return { accessToken: session.accessToken, session };
+  return { idToken: session.idToken, session };
 }
 
 export const appRouter = router({
@@ -75,7 +76,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         try {
           const tokens = await traegerLogin(input.email, input.password);
-          const userData = await traegerGetUser(tokens.accessToken);
+          const userData = await traegerGetUser(tokens.idToken);
           const expiresAt = Date.now() + tokens.expiresIn * 1000;
 
           await upsertTraegerSession({
@@ -123,8 +124,8 @@ export const appRouter = router({
 
     // Refresh grill list from Traeger API
     refreshGrills: protectedProcedure.mutation(async ({ ctx }) => {
-      const { accessToken } = await getValidAccessToken(ctx.user.id);
-      const userData = await traegerGetUser(accessToken);
+      const { idToken } = await getValidIdToken(ctx.user.id);
+      const userData = await traegerGetUser(idToken);
       const session = await getTraegerSession(ctx.user.id);
       if (session) {
         await upsertTraegerSession({
@@ -145,11 +146,11 @@ export const appRouter = router({
 
     // Get MQTT credentials for real-time connection
     mqttCredentials: protectedProcedure.query(async ({ ctx }) => {
-      const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+      const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
       }
-      const creds = await traegerGetMqttCredentials(accessToken, session.selectedGrillId);
+      const creds = await traegerGetMqttCredentials(idToken, session.selectedGrillId);
       return {
         ...creds,
         thingName: session.selectedGrillId,
@@ -163,79 +164,79 @@ export const appRouter = router({
     sendCommand: protectedProcedure
       .input(z.object({ command: z.string() }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) {
           throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
         }
-        return traegerSendCommand(accessToken, session.selectedGrillId, input.command);
+        return traegerSendCommand(idToken, session.selectedGrillId, input.command);
       }),
 
     // Set grill temperature
     setTemp: protectedProcedure
       .input(z.object({ temp: z.number().min(165).max(500) }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-        return traegerSendCommand(accessToken, session.selectedGrillId, `${COMMANDS.SET_TEMP},${input.temp}`);
+        return traegerSendCommand(idToken, session.selectedGrillId, `${COMMANDS.SET_TEMP},${input.temp}`);
       }),
 
     // Set cook timer (in seconds)
     setTimer: protectedProcedure
       .input(z.object({ seconds: z.number().min(60).max(86400) }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-        return traegerSendCommand(accessToken, session.selectedGrillId, `${COMMANDS.SET_TIMER},${input.seconds}`);
+        return traegerSendCommand(idToken, session.selectedGrillId, `${COMMANDS.SET_TIMER},${input.seconds}`);
       }),
 
     // Clear cook timer
     clearTimer: protectedProcedure.mutation(async ({ ctx }) => {
-      const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+      const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-      return traegerSendCommand(accessToken, session.selectedGrillId, COMMANDS.CLEAR_TIMER);
+      return traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.CLEAR_TIMER);
     }),
 
     // Set probe alarm temperature
     setProbeAlarm: protectedProcedure
       .input(z.object({ temp: z.number().min(100).max(220) }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-        return traegerSendCommand(accessToken, session.selectedGrillId, `${COMMANDS.SET_PROBE_ALARM},${input.temp}`);
+        return traegerSendCommand(idToken, session.selectedGrillId, `${COMMANDS.SET_PROBE_ALARM},${input.temp}`);
       }),
 
     // Super Smoke toggle
     setSuperSmoke: protectedProcedure
       .input(z.object({ enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
         const cmd = input.enabled ? COMMANDS.SUPER_SMOKE_ON : COMMANDS.SUPER_SMOKE_OFF;
-        return traegerSendCommand(accessToken, session.selectedGrillId, cmd);
+        return traegerSendCommand(idToken, session.selectedGrillId, cmd);
       }),
 
     // Keep Warm toggle
     setKeepWarm: protectedProcedure
       .input(z.object({ enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
-        const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+        const { idToken, session } = await getValidIdToken(ctx.user.id);
         if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
         const cmd = input.enabled ? COMMANDS.KEEP_WARM_ON : COMMANDS.KEEP_WARM_OFF;
-        return traegerSendCommand(accessToken, session.selectedGrillId, cmd);
+        return traegerSendCommand(idToken, session.selectedGrillId, cmd);
       }),
 
     // Shutdown
     shutdown: protectedProcedure.mutation(async ({ ctx }) => {
-      const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+      const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-      return traegerSendCommand(accessToken, session.selectedGrillId, COMMANDS.SHUTDOWN);
+      return traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.SHUTDOWN);
     }),
 
     // Request status update
     requestStatus: protectedProcedure.mutation(async ({ ctx }) => {
-      const { accessToken, session } = await getValidAccessToken(ctx.user.id);
+      const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
-      return traegerSendCommand(accessToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);
+      return traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);
     }),
   }),
 

@@ -69,3 +69,6 @@
 - [x] Auth tests (me, logout)
 - [x] Protected route tests
 - [x] Input validation tests (temp ranges, timer bounds)
+
+## Bug Fixes
+- [x] Fix Traeger login 422 error - switched to direct Cognito InitiateAuth with correct CLIENT_ID, headers, and idToken usage

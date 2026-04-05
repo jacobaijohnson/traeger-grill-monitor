@@ -1,7 +1,11 @@
 import axios from "axios";
 import type { TraegerTokens, TraegerUserData, TraegerMqttCredentials } from "@shared/traeger-types";
 
-const TRAEGER_AUTH_URL = "https://auth-api.iot.traegergrills.io";
+// Cognito direct auth endpoint (not the auth-api proxy)
+const COGNITO_URL = "https://cognito-idp.us-west-2.amazonaws.com/";
+const COGNITO_CLIENT_ID = "2fuohjtqv1e63dckp5v84rau0j";
+
+// Traeger API Gateway
 const TRAEGER_API_URL = "https://1ywgyc65d1.execute-api.us-west-2.amazonaws.com/prod";
 
 const traegerClient = axios.create({
@@ -9,50 +13,105 @@ const traegerClient = axios.create({
 });
 
 /**
- * Authenticate with Traeger using email/password.
- * Returns Cognito tokens.
+ * Generate AWS date format for Cognito requests
+ */
+function getAmzDate(): string {
+  const t = new Date();
+  return t.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/**
+ * Authenticate with Traeger using email/password via AWS Cognito InitiateAuth.
+ * This calls the Cognito Identity Provider directly with USER_PASSWORD_AUTH flow.
  */
 export async function traegerLogin(email: string, password: string): Promise<TraegerTokens> {
-  const response = await traegerClient.post(`${TRAEGER_AUTH_URL}/tokens`, {
-    email,
-    password,
-  });
+  const amzDate = getAmzDate();
 
-  const data = response.data;
+  const response = await traegerClient.post(
+    COGNITO_URL,
+    {
+      ClientMetadata: {},
+      AuthParameters: {
+        PASSWORD: password,
+        USERNAME: email,
+      },
+      AuthFlow: "USER_PASSWORD_AUTH",
+      ClientId: COGNITO_CLIENT_ID,
+    },
+    {
+      headers: {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Date": amzDate,
+        "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+      },
+    }
+  );
+
+  const result = response.data?.AuthenticationResult;
+  if (!result) {
+    throw new Error("Authentication failed: no AuthenticationResult in response");
+  }
+
   return {
-    accessToken: data.access_token || data.accessToken,
-    idToken: data.id_token || data.idToken,
-    refreshToken: data.refresh_token || data.refreshToken,
-    expiresIn: data.expires_in || data.expiresIn || 3600,
-    tokenType: data.token_type || data.tokenType || "Bearer",
+    accessToken: result.AccessToken,
+    idToken: result.IdToken,
+    refreshToken: result.RefreshToken,
+    expiresIn: result.ExpiresIn || 3600,
+    tokenType: result.TokenType || "Bearer",
   };
 }
 
 /**
- * Refresh Traeger tokens using the refresh token.
+ * Refresh Traeger tokens using the refresh token via Cognito.
  */
 export async function traegerRefreshTokens(refreshToken: string): Promise<TraegerTokens> {
-  const response = await traegerClient.post(`${TRAEGER_AUTH_URL}/tokens`, {
-    refresh_token: refreshToken,
-  });
+  const amzDate = getAmzDate();
 
-  const data = response.data;
+  const response = await traegerClient.post(
+    COGNITO_URL,
+    {
+      ClientMetadata: {},
+      AuthParameters: {
+        REFRESH_TOKEN: refreshToken,
+      },
+      AuthFlow: "REFRESH_TOKEN_AUTH",
+      ClientId: COGNITO_CLIENT_ID,
+    },
+    {
+      headers: {
+        "Content-Type": "application/x-amz-json-1.1",
+        "X-Amz-Date": amzDate,
+        "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth",
+      },
+    }
+  );
+
+  const result = response.data?.AuthenticationResult;
+  if (!result) {
+    throw new Error("Token refresh failed: no AuthenticationResult in response");
+  }
+
   return {
-    accessToken: data.access_token || data.accessToken,
-    idToken: data.id_token || data.idToken,
-    refreshToken: data.refresh_token || data.refreshToken || refreshToken,
-    expiresIn: data.expires_in || data.expiresIn || 3600,
-    tokenType: data.token_type || data.tokenType || "Bearer",
+    // Cognito refresh does not return a new RefreshToken, keep the old one
+    accessToken: result.AccessToken,
+    idToken: result.IdToken,
+    refreshToken: refreshToken,
+    expiresIn: result.ExpiresIn || 3600,
+    tokenType: result.TokenType || "Bearer",
   };
 }
 
 /**
  * Get user data including registered grills.
+ * Uses idToken for authorization (not accessToken).
  */
-export async function traegerGetUser(accessToken: string): Promise<TraegerUserData> {
+export async function traegerGetUser(idToken: string): Promise<TraegerUserData> {
   const response = await traegerClient.get(`${TRAEGER_API_URL}/users/self`, {
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: idToken,
+      "Content-Type": "application/json",
+      "Accept-Language": "en-us",
+      "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
     },
   });
 
@@ -73,17 +132,21 @@ export async function traegerGetUser(accessToken: string): Promise<TraegerUserDa
 
 /**
  * Get MQTT WebSocket connection credentials.
+ * Uses idToken for authorization.
  */
 export async function traegerGetMqttCredentials(
-  accessToken: string,
-  thingName: string
+  idToken: string,
+  _thingName: string
 ): Promise<TraegerMqttCredentials> {
   const response = await traegerClient.post(
     `${TRAEGER_API_URL}/mqtt-connections`,
-    { thingName },
+    {},
     {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: idToken,
+        "Content-Type": "application/json",
+        "Accept-Language": "en-us",
+        "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
   );
@@ -99,9 +162,10 @@ export async function traegerGetMqttCredentials(
 /**
  * Send a command to the grill via the Traeger API.
  * Commands are sent as comma-separated values: "commandCode,value"
+ * Uses idToken for authorization.
  */
 export async function traegerSendCommand(
-  accessToken: string,
+  idToken: string,
   thingName: string,
   command: string
 ): Promise<{ success: boolean }> {
@@ -110,7 +174,10 @@ export async function traegerSendCommand(
     { command },
     {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: idToken,
+        "Content-Type": "application/json",
+        "Accept-Language": "en-us",
+        "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
   );
@@ -120,16 +187,20 @@ export async function traegerSendCommand(
 
 /**
  * Get grill details/status from the API.
+ * Uses idToken for authorization.
  */
 export async function traegerGetGrillDetails(
-  accessToken: string,
+  idToken: string,
   thingName: string
 ): Promise<Record<string, unknown>> {
   const response = await traegerClient.get(
     `${TRAEGER_API_URL}/things/${thingName}`,
     {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: idToken,
+        "Content-Type": "application/json",
+        "Accept-Language": "en-us",
+        "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
   );

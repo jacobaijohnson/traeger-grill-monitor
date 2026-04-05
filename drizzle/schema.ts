@@ -43,6 +43,7 @@ export const telemetryReadings = mysqlTable("telemetry_readings", {
   probeTemp: float("probeTemp"),
   ambientTemp: float("ambientTemp"),
   targetTemp: float("targetTemp"),
+  targetProbeTemp: float("targetProbeTemp"),
   pelletLevel: int("pelletLevel"),
   systemStatus: int("systemStatus"),
   recordedAt: timestamp("recordedAt").defaultNow().notNull(),
@@ -62,6 +63,12 @@ export const cookSessions = mysqlTable("cook_sessions", {
   method: varchar("method", { length: 32 }),
   notes: text("notes"),
   rating: int("rating"),
+  status: varchar("status", { length: 16 }).default("active").notNull(), // active, completed, cancelled
+  stagesJson: json("stagesJson"), // cook guide stages for this session
+  alertsJson: json("alertsJson"), // configured alerts for this session
+  currentStage: int("currentStage").default(0).notNull(),
+  peakGrillTemp: float("peakGrillTemp"),
+  peakProbeTemp: float("peakProbeTemp"),
   startedAt: timestamp("startedAt").defaultNow().notNull(),
   endedAt: timestamp("endedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -69,6 +76,24 @@ export const cookSessions = mysqlTable("cook_sessions", {
 
 export type CookSession = typeof cookSessions.$inferSelect;
 export type InsertCookSession = typeof cookSessions.$inferInsert;
+
+// Cook alerts (fired during a session, persisted for history)
+export const cookAlerts = mysqlTable("cook_alerts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  cookSessionId: int("cookSessionId").notNull(),
+  alertType: varchar("alertType", { length: 16 }).notNull(), // notification, alarm
+  label: varchar("label", { length: 128 }).notNull(),
+  triggerTemp: float("triggerTemp").notNull(),
+  triggerType: varchar("triggerType", { length: 16 }).default("probe").notNull(), // probe, grill
+  status: varchar("status", { length: 16 }).default("pending").notNull(), // pending, fired, dismissed, missed
+  firedAt: timestamp("firedAt"),
+  dismissedAt: timestamp("dismissedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CookAlert = typeof cookAlerts.$inferSelect;
+export type InsertCookAlert = typeof cookAlerts.$inferInsert;
 
 // Automation programs (multi-stage cook programs)
 export const automationPrograms = mysqlTable("automation_programs", {

@@ -6,11 +6,13 @@ import {
   traegerSessions,
   telemetryReadings,
   cookSessions,
+  cookAlerts,
   automationPrograms,
   customTemplates,
   type InsertTraegerSession,
   type InsertTelemetryReading,
   type InsertCookSession,
+  type InsertCookAlert,
   type InsertAutomationProgram,
   type InsertCustomTemplate,
 } from "../drizzle/schema";
@@ -363,4 +365,116 @@ export async function forkCustomTemplate(id: number, userId: number, authorName:
     forkedFromId: id,
   });
   return result[0].insertId;
+}
+
+// ===== Cook Alerts =====
+
+export async function insertCookAlert(data: InsertCookAlert) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(cookAlerts).values(data);
+  return result[0].insertId;
+}
+
+export async function getCookAlertsForSession(cookSessionId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(cookAlerts)
+    .where(eq(cookAlerts.cookSessionId, cookSessionId))
+    .orderBy(cookAlerts.triggerTemp);
+}
+
+export async function updateCookAlertStatus(
+  id: number,
+  status: string,
+  firedAt?: Date,
+  dismissedAt?: Date
+) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = { status };
+  if (firedAt) updateData.firedAt = firedAt;
+  if (dismissedAt) updateData.dismissedAt = dismissedAt;
+  await db.update(cookAlerts).set(updateData).where(eq(cookAlerts.id, id));
+}
+
+export async function dismissCookAlert(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(cookAlerts)
+    .set({ status: "dismissed", dismissedAt: new Date() })
+    .where(eq(cookAlerts.id, id));
+}
+
+// ===== Enhanced Cook Sessions =====
+
+export async function getActiveCookSession(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(cookSessions)
+    .where(
+      and(
+        eq(cookSessions.userId, userId),
+        eq(cookSessions.status, "active")
+      )
+    )
+    .orderBy(desc(cookSessions.startedAt))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateCookSessionStatus(
+  id: number,
+  status: string,
+  extras?: { endedAt?: Date; peakGrillTemp?: number; peakProbeTemp?: number; currentStage?: number }
+) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = { status };
+  if (extras?.endedAt) updateData.endedAt = extras.endedAt;
+  if (extras?.peakGrillTemp !== undefined) updateData.peakGrillTemp = extras.peakGrillTemp;
+  if (extras?.peakProbeTemp !== undefined) updateData.peakProbeTemp = extras.peakProbeTemp;
+  if (extras?.currentStage !== undefined) updateData.currentStage = extras.currentStage;
+  await db.update(cookSessions).set(updateData).where(eq(cookSessions.id, id));
+}
+
+export async function updateCookSessionAlerts(id: number, alertsJson: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(cookSessions).set({ alertsJson }).where(eq(cookSessions.id, id));
+}
+
+export async function updateCookSessionStages(id: number, stagesJson: string, currentStage: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(cookSessions).set({ stagesJson, currentStage }).where(eq(cookSessions.id, id));
+}
+
+// ===== Telemetry Persistence from MQTT =====
+
+export async function persistTelemetryFromMqtt(
+  userId: number,
+  telemetry: { grill: number; probe: number; ambient: number; set: number; probeSet: number; pelletLevel: number; systemStatus: number },
+  grillId: string,
+  cookSessionId?: number
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(telemetryReadings).values({
+    userId,
+    grillId,
+    cookSessionId: cookSessionId ?? null,
+    grillTemp: telemetry.grill,
+    probeTemp: telemetry.probe,
+    ambientTemp: telemetry.ambient,
+    targetTemp: telemetry.set,
+    targetProbeTemp: telemetry.probeSet,
+    pelletLevel: telemetry.pelletLevel,
+    systemStatus: telemetry.systemStatus,
+  });
 }

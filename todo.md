@@ -118,11 +118,45 @@
 - [x] Implement adaptive polling (10s cooking, 20s cooling, 30s idle)
 - [x] Wire Dashboard to poll live telemetry with MQTT connection status display
 - [x] Auto-refresh MQTT signed URL before expiry
-- [ ] Tighten Cook Guide → Automation flow (Start Cook button creates and launches automation)
-- [ ] Merge Cook Guide and Automation into unified workflow
+- [x] Cook Guide → Live Cook flow (Start Cook button creates and launches live cook session)
+- [x] Merged: Live Cook redirects to Cook Guide when idle, Cook Guide launches Live Cook sessions
 
 ## Rename to Traeger Smoker Insight
 - [x] Update DashboardLayout sidebar branding to "Traeger Smoker Insight"
 - [x] Update index.html title to "Traeger Smoker Insight"
 - [x] Update Settings page branding references
 - [x] Update any other page references from PitDeck to Traeger Smoker Insight
+
+## Live Cook Tracking & Advanced Features
+- [x] Design architecture for interconnected cook tracking, notifications, and graph systems
+- [x] Cook duration tracking: auto-detect cook start/end, persist session with all telemetry
+- [x] Advanced temperature graph: 10min minimum to full cook range, zoom/pan/scale controls
+- [x] Meat science markers: horizontal dotted lines for fat render, collagen breakdown, stall zone, target temp per meat type
+- [x] Dual notification system: Ping (one-time browser notification) vs Alarm (persistent until dismissed)
+- [x] Notification/alarm toggle controls per alert type
+- [x] Rename Automation tab to "Live Cook" — shows active cook status when cooking, redirects to Cook Guide when idle
+- [x] Live Cook summary: elapsed time, estimated remaining, current stage, probe trajectory
+- [x] Stall detector: alert when probe temp plateaus for extended period
+- [x] Cook Guide integration: "Start Cook" launches live cook with pre-configured alerts and stages
+- [x] Cook Guide alarm integration: temp-based alerts that won't stop until dismissed
+- [x] Telemetry persistence: save all readings to DB for historical graph replay
+- [x] Graph time window selector: 10min, 30min, 1hr, 2hr, full cook
+- [x] Historical cook replay with same advanced graph features
+
+## Server-Side Persistence & Session Resilience
+- [x] Server-side cook session state machine (survives browser close/restart)
+- [x] Server-side alert evaluation (fires even when browser is closed)
+- [x] Missed alerts queue: show alerts that fired while browser was away
+- [x] Session rehydration: dashboard recovers full state from DB on reconnect
+
+## Cook Guide Confirmation Flow
+- [x] "Start this cook?" confirmation dialog when selecting a cook guide
+- [x] "Active cook in progress" warning dialog if already in a live session
+- [x] End current session and save to history before starting new cook
+
+## PWA Support (iOS/Android/Desktop)
+- [x] Add web app manifest (manifest.json) with app name, icons, theme color
+- [x] Add service worker for offline caching and background notification support
+- [x] Add "Install App" prompt/button in DashboardLayout (notification banner)
+- [x] Configure PWA meta tags in index.html for iOS Add to Home Screen
+- [x] Service worker configured for background notification delivery

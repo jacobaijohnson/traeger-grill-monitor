@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Controls from "./pages/Controls";
 import CookGuide from "./pages/CookGuide";
-import Automation from "./pages/Automation";
+import LiveCook from "./pages/LiveCook";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
 import DashboardLayout from "./components/DashboardLayout";
@@ -21,7 +21,9 @@ function Router() {
         <Route path={"/dashboard"} component={Dashboard} />
         <Route path={"/controls"} component={Controls} />
         <Route path={"/cook-guide"} component={CookGuide} />
-        <Route path={"/automation"} component={Automation} />
+        <Route path={"/live-cook"} component={LiveCook} />
+        {/* Keep old route for backward compat */}
+        <Route path={"/automation"} component={LiveCook} />
         <Route path={"/history"} component={History} />
         <Route path={"/settings"} component={Settings} />
         <Route path={"/404"} component={NotFound} />

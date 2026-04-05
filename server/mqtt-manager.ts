@@ -1,5 +1,35 @@
 import mqtt from "mqtt";
 import type { TraegerTelemetry } from "@shared/traeger-types";
+import type { TempMarker } from "@shared/meat-science";
+
+// ─── Types ──────────────────────────────────────────────
+
+export interface CookAlert {
+  id: string;
+  label: string;
+  triggerTemp: number;
+  triggerType: "probe" | "grill";
+  alertType: "notification" | "alarm";
+  status: "pending" | "fired" | "dismissed";
+  firedAt?: number;
+  message?: string;
+}
+
+interface ActiveCookSession {
+  cookSessionId: number;
+  templateId?: string;
+  meatProfileId?: string;
+  startedAt: number;
+  alerts: CookAlert[];
+  stages?: Array<{ name: string; temp: number; duration?: number }>;
+  currentStage: number;
+  peakGrillTemp: number;
+  peakProbeTemp: number;
+  stallDetected: boolean;
+  stallStartedAt?: number;
+  stallStartTemp?: number;
+  lastProbeTemps: number[]; // last 10 readings for stall detection
+}
 
 interface MqttSession {
   client: mqtt.MqttClient | null;
@@ -10,6 +40,10 @@ interface MqttSession {
   lastUpdate: number;
   reconnecting: boolean;
   history: Array<TraegerTelemetry & { timestamp: number }>;
+  activeCook: ActiveCookSession | null;
+  firedAlerts: CookAlert[]; // alerts that fired (for missed alerts panel)
+  dbPersistInterval: ReturnType<typeof setInterval> | null;
+  dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
 }
 
 // In-memory store of active MQTT sessions keyed by userId
@@ -34,14 +68,10 @@ const DEFAULT_TELEMETRY: TraegerTelemetry = {
   acc: [],
 };
 
-/**
- * Parse the MQTT message payload into our telemetry format.
- * The Traeger MQTT payload uses snake_case keys nested under "status".
- */
-function parseTelemetry(payload: Record<string, unknown>): Partial<TraegerTelemetry> {
-  // The payload can be the full message or just the status object
-  const status = (payload.status || payload) as Record<string, unknown>;
+// ─── Telemetry Parser ───────────────────────────────────
 
+function parseTelemetry(payload: Record<string, unknown>): Partial<TraegerTelemetry> {
+  const status = (payload.status || payload) as Record<string, unknown>;
   const result: Partial<TraegerTelemetry> = {};
 
   if (typeof status.grill === "number") result.grill = status.grill;
@@ -71,30 +101,93 @@ function parseTelemetry(payload: Record<string, unknown>): Partial<TraegerTeleme
   return result;
 }
 
-/**
- * Connect to the Traeger MQTT broker for a specific user/grill.
- * Uses the signed WebSocket URL from the Traeger API.
- */
+// ─── Alert Engine ───────────────────────────────────────
+
+function evaluateAlerts(session: MqttSession): CookAlert[] {
+  if (!session.activeCook) return [];
+
+  const newlyFired: CookAlert[] = [];
+  const telemetry = session.telemetry;
+
+  for (const alert of session.activeCook.alerts) {
+    if (alert.status !== "pending") continue;
+
+    const currentTemp = alert.triggerType === "probe" ? telemetry.probe : telemetry.grill;
+    if (currentTemp >= alert.triggerTemp) {
+      alert.status = "fired";
+      alert.firedAt = Date.now();
+      newlyFired.push(alert);
+      session.firedAlerts.push({ ...alert });
+      console.log(`[ALERT] User session: ${alert.alertType.toUpperCase()} fired — ${alert.label} at ${currentTemp}°F (target: ${alert.triggerTemp}°F)`);
+    }
+  }
+
+  return newlyFired;
+}
+
+// ─── Stall Detection ────────────────────────────────────
+
+function detectStall(session: MqttSession): void {
+  if (!session.activeCook) return;
+  const cook = session.activeCook;
+
+  // Add current probe temp to rolling window
+  cook.lastProbeTemps.push(session.telemetry.probe);
+  if (cook.lastProbeTemps.length > 10) {
+    cook.lastProbeTemps.shift();
+  }
+
+  // Need at least 10 readings (~5 min at 30s intervals)
+  if (cook.lastProbeTemps.length < 10) return;
+
+  // Check if probe is in the stall zone (150-170°F) and temp change < 2°F over window
+  const probeTemp = session.telemetry.probe;
+  const tempRange = Math.max(...cook.lastProbeTemps) - Math.min(...cook.lastProbeTemps);
+
+  if (probeTemp >= 145 && probeTemp <= 175 && tempRange < 2) {
+    if (!cook.stallDetected) {
+      cook.stallDetected = true;
+      cook.stallStartedAt = Date.now();
+      cook.stallStartTemp = probeTemp;
+      console.log(`[STALL] Detected at ${probeTemp}°F — temp change < 2°F over last 10 readings`);
+    }
+  } else if (cook.stallDetected && probeTemp > (cook.stallStartTemp || 0) + 5) {
+    // Stall broken — temp rose more than 5°F above stall start
+    console.log(`[STALL] Broken at ${probeTemp}°F (started at ${cook.stallStartTemp}°F)`);
+    cook.stallDetected = false;
+    cook.stallStartedAt = undefined;
+    cook.stallStartTemp = undefined;
+  }
+}
+
+// ─── Peak Tracking ──────────────────────────────────────
+
+function trackPeaks(session: MqttSession): void {
+  if (!session.activeCook) return;
+  if (session.telemetry.grill > session.activeCook.peakGrillTemp) {
+    session.activeCook.peakGrillTemp = session.telemetry.grill;
+  }
+  if (session.telemetry.probe > session.activeCook.peakProbeTemp) {
+    session.activeCook.peakProbeTemp = session.telemetry.probe;
+  }
+}
+
+// ─── MQTT Connection ────────────────────────────────────
+
 export function connectMqtt(
   userId: number,
   thingName: string,
   signedUrl: string,
   expiresAt: number
 ): void {
-  // If already connected to the same grill, check if URL needs refresh
   const existing = sessions.get(userId);
   if (existing && existing.thingName === thingName && existing.client?.connected) {
-    // If the URL hasn't expired, keep the existing connection
     if (existing.expiresAt > Date.now() + 60000) {
-      console.log(`[MQTT] User ${userId}: Already connected to ${thingName}`);
       return;
     }
-    // URL expiring soon, disconnect and reconnect
-    console.log(`[MQTT] User ${userId}: URL expiring, reconnecting...`);
     disconnectMqtt(userId);
   }
 
-  // If connected to a different grill, disconnect first
   if (existing && existing.thingName !== thingName) {
     disconnectMqtt(userId);
   }
@@ -108,14 +201,16 @@ export function connectMqtt(
     lastUpdate: 0,
     reconnecting: false,
     history: existing?.history || [],
+    activeCook: existing?.activeCook || null,
+    firedAlerts: existing?.firedAlerts || [],
+    dbPersistInterval: null,
+    dbPersistCallback: existing?.dbPersistCallback || null,
   };
 
   sessions.set(userId, session);
 
   try {
     console.log(`[MQTT] User ${userId}: Connecting to ${thingName}...`);
-
-    // Parse the signed URL to extract the WebSocket path
     const url = new URL(signedUrl);
     const wsUrl = `wss://${url.host}${url.pathname}${url.search}`;
 
@@ -125,12 +220,7 @@ export function connectMqtt(
       reconnectPeriod: 5000,
       connectTimeout: 15000,
       rejectUnauthorized: false,
-      // MQTT over WebSocket settings
-      wsOptions: {
-        headers: {
-          Host: url.host,
-        },
-      },
+      wsOptions: { headers: { Host: url.host } },
     });
 
     session.client = client;
@@ -139,7 +229,6 @@ export function connectMqtt(
       console.log(`[MQTT] User ${userId}: Connected to broker`);
       session.reconnecting = false;
 
-      // Subscribe to the grill's update topic
       const topic = `prod/thing/update/${thingName}`;
       client.subscribe(topic, { qos: 1 }, (err) => {
         if (err) {
@@ -155,7 +244,6 @@ export function connectMqtt(
         const payload = JSON.parse(message.toString());
         const telemetryUpdate = parseTelemetry(payload);
 
-        // Merge with existing telemetry
         session.telemetry = {
           ...session.telemetry,
           ...telemetryUpdate,
@@ -163,20 +251,24 @@ export function connectMqtt(
         };
         session.lastUpdate = Date.now();
 
-        // Add to history (keep last 2 hours at ~30s intervals = ~240 points)
+        // Add to in-memory history (keep last 8 hours at ~30s = ~960 points)
         session.history.push({
           ...session.telemetry,
           timestamp: Date.now(),
         });
-        if (session.history.length > 300) {
-          session.history = session.history.slice(-300);
+        if (session.history.length > 1000) {
+          session.history = session.history.slice(-1000);
         }
 
-        console.log(
-          `[MQTT] User ${userId}: Telemetry update - grill=${session.telemetry.grill}°F, ` +
-          `probe=${session.telemetry.probe}°F, status=${session.telemetry.systemStatus}, ` +
-          `pellets=${session.telemetry.pelletLevel}%`
-        );
+        // Run alert engine
+        evaluateAlerts(session);
+
+        // Track peaks
+        trackPeaks(session);
+
+        // Stall detection
+        detectStall(session);
+
       } catch (err) {
         console.error(`[MQTT] User ${userId}: Parse error:`, err);
       }
@@ -187,50 +279,60 @@ export function connectMqtt(
     });
 
     client.on("close", () => {
-      console.log(`[MQTT] User ${userId}: Connection closed`);
       if (session.telemetry.connected) {
         session.telemetry = { ...session.telemetry, connected: false };
       }
     });
 
     client.on("reconnect", () => {
-      console.log(`[MQTT] User ${userId}: Reconnecting...`);
       session.reconnecting = true;
     });
 
     client.on("offline", () => {
       console.log(`[MQTT] User ${userId}: Client offline`);
     });
+
+    // Set up periodic DB persistence (every 30 seconds)
+    session.dbPersistInterval = setInterval(async () => {
+      if (session.dbPersistCallback && session.telemetry.connected && session.telemetry.grill > 0) {
+        try {
+          await session.dbPersistCallback(
+            userId,
+            session.telemetry,
+            session.activeCook?.cookSessionId
+          );
+        } catch (err) {
+          console.error(`[MQTT] User ${userId}: DB persist error:`, err);
+        }
+      }
+    }, 30000);
+
   } catch (err) {
     console.error(`[MQTT] User ${userId}: Connection failed:`, err);
   }
 }
 
-/**
- * Disconnect MQTT for a user.
- */
+// ─── Disconnect ─────────────────────────────────────────
+
 export function disconnectMqtt(userId: number): void {
   const session = sessions.get(userId);
-  if (session?.client) {
-    try {
-      session.client.end(true);
-    } catch {
-      // Ignore close errors
+  if (session) {
+    if (session.dbPersistInterval) {
+      clearInterval(session.dbPersistInterval);
     }
-    session.client = null;
+    if (session.client) {
+      try { session.client.end(true); } catch { /* ignore */ }
+      session.client = null;
+    }
   }
   sessions.delete(userId);
-  console.log(`[MQTT] User ${userId}: Disconnected`);
 }
 
-/**
- * Get the latest telemetry for a user.
- * Returns null if no MQTT session exists.
- */
+// ─── Telemetry Getters ──────────────────────────────────
+
 export function getTelemetry(userId: number): (TraegerTelemetry & { lastUpdate: number; mqttConnected: boolean }) | null {
   const session = sessions.get(userId);
   if (!session) return null;
-
   return {
     ...session.telemetry,
     lastUpdate: session.lastUpdate,
@@ -238,48 +340,159 @@ export function getTelemetry(userId: number): (TraegerTelemetry & { lastUpdate: 
   };
 }
 
-/**
- * Get telemetry history for graphing.
- */
-export function getTelemetryHistory(userId: number): Array<TraegerTelemetry & { timestamp: number }> {
+export function getTelemetryHistory(userId: number, sinceMinutesAgo?: number): Array<TraegerTelemetry & { timestamp: number }> {
   const session = sessions.get(userId);
   if (!session) return [];
-  return session.history;
+  if (!sinceMinutesAgo) return session.history;
+  const cutoff = Date.now() - sinceMinutesAgo * 60 * 1000;
+  return session.history.filter((h) => h.timestamp >= cutoff);
 }
 
-/**
- * Check if MQTT is connected for a user.
- */
 export function isMqttConnected(userId: number): boolean {
   const session = sessions.get(userId);
   return session?.client?.connected || false;
 }
 
-/**
- * Check if the MQTT URL needs refresh (within 5 min of expiry).
- */
 export function needsUrlRefresh(userId: number): boolean {
   const session = sessions.get(userId);
   if (!session) return false;
   return session.expiresAt < Date.now() + 300000;
 }
 
-/**
- * Update the MQTT connection with a new signed URL.
- */
-export function refreshMqttUrl(
-  userId: number,
-  thingName: string,
-  signedUrl: string,
-  expiresAt: number
-): void {
+export function refreshMqttUrl(userId: number, thingName: string, signedUrl: string, expiresAt: number): void {
   disconnectMqtt(userId);
   connectMqtt(userId, thingName, signedUrl, expiresAt);
 }
 
-/**
- * Get all active session user IDs (for cleanup).
- */
 export function getActiveSessionUserIds(): number[] {
   return Array.from(sessions.keys());
+}
+
+// ─── Cook Session Lifecycle ─────────────────────────────
+
+export function startCookSession(
+  userId: number,
+  cookSessionId: number,
+  opts: {
+    templateId?: string;
+    meatProfileId?: string;
+    alerts?: CookAlert[];
+    stages?: Array<{ name: string; temp: number; duration?: number }>;
+  }
+): void {
+  const session = sessions.get(userId);
+  if (!session) return;
+
+  session.activeCook = {
+    cookSessionId,
+    templateId: opts.templateId,
+    meatProfileId: opts.meatProfileId,
+    startedAt: Date.now(),
+    alerts: opts.alerts || [],
+    stages: opts.stages,
+    currentStage: 0,
+    peakGrillTemp: 0,
+    peakProbeTemp: 0,
+    stallDetected: false,
+    lastProbeTemps: [],
+  };
+  session.firedAlerts = [];
+
+  console.log(`[COOK] User ${userId}: Started cook session ${cookSessionId}`);
+}
+
+export function endCookSession(userId: number): ActiveCookSession | null {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return null;
+
+  const ended = { ...session.activeCook };
+  session.activeCook = null;
+  session.firedAlerts = [];
+
+  console.log(`[COOK] User ${userId}: Ended cook session ${ended.cookSessionId}`);
+  return ended;
+}
+
+export function getActiveCook(userId: number): ActiveCookSession | null {
+  const session = sessions.get(userId);
+  return session?.activeCook || null;
+}
+
+// ─── Alert Management ───────────────────────────────────
+
+export function dismissAlert(userId: number, alertId: string): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return false;
+
+  const alert = session.activeCook.alerts.find((a) => a.id === alertId);
+  if (alert && alert.status === "fired") {
+    alert.status = "dismissed";
+    return true;
+  }
+  return false;
+}
+
+export function getFiredAlerts(userId: number): CookAlert[] {
+  const session = sessions.get(userId);
+  if (!session) return [];
+
+  const activeFired = session.activeCook?.alerts.filter((a) => a.status === "fired") || [];
+  return activeFired;
+}
+
+export function getMissedAlerts(userId: number): CookAlert[] {
+  const session = sessions.get(userId);
+  if (!session) return [];
+  return session.firedAlerts.filter((a) => a.status === "fired");
+}
+
+export function addAlert(userId: number, alert: CookAlert): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return false;
+  session.activeCook.alerts.push(alert);
+  return true;
+}
+
+export function removeAlert(userId: number, alertId: string): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return false;
+  session.activeCook.alerts = session.activeCook.alerts.filter((a) => a.id !== alertId);
+  return true;
+}
+
+// ─── Stall Info ─────────────────────────────────────────
+
+export function getStallInfo(userId: number): { detected: boolean; startedAt?: number; startTemp?: number; duration?: number } | null {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return null;
+  const cook = session.activeCook;
+  return {
+    detected: cook.stallDetected,
+    startedAt: cook.stallStartedAt,
+    startTemp: cook.stallStartTemp,
+    duration: cook.stallStartedAt ? Date.now() - cook.stallStartedAt : undefined,
+  };
+}
+
+// ─── DB Persistence Callback ────────────────────────────
+
+export function setDbPersistCallback(
+  userId: number,
+  callback: (userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>
+): void {
+  const session = sessions.get(userId);
+  if (session) {
+    session.dbPersistCallback = callback;
+  }
+}
+
+// ─── Cook Stage Management ──────────────────────────────
+
+export function advanceCookStage(userId: number): number {
+  const session = sessions.get(userId);
+  if (!session?.activeCook?.stages) return -1;
+  if (session.activeCook.currentStage < session.activeCook.stages.length - 1) {
+    session.activeCook.currentStage++;
+  }
+  return session.activeCook.currentStage;
 }

@@ -1,8 +1,9 @@
-import { useTraegerStatus, useLiveTelemetry, useTelemetryHistory, useGrillCommands } from "@/hooks/useTraeger";
+import { useTraegerStatus, useLiveTelemetry, useTelemetryHistory, useGrillCommands, useLiveCook } from "@/hooks/useTraeger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import TemperatureGraph from "@/components/TemperatureGraph";
 import {
   Thermometer,
   Flame,
@@ -15,21 +16,14 @@ import {
   AlertTriangle,
   RefreshCw,
   Gauge,
+  ChefHat,
+  ArrowRight,
 } from "lucide-react";
 import { getSystemStatus } from "@shared/traeger-types";
+import { getMeatProfile } from "@shared/meat-science";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
 
 function StatusBadge({ code }: { code: number }) {
   const status = getSystemStatus(code);
@@ -156,6 +150,7 @@ export default function Dashboard() {
   const { data: telemetry, isLoading: telemetryLoading } = useLiveTelemetry();
   const { chartData } = useTelemetryHistory();
   const commands = useGrillCommands();
+  const { activeCook } = useLiveCook();
 
   if (statusLoading) {
     return (
@@ -191,7 +186,7 @@ export default function Dashboard() {
             {[
               { icon: Thermometer, title: "Live Telemetry", desc: "Real-time grill, probe, and ambient temperatures" },
               { icon: Flame, title: "Remote Controls", desc: "Set temperature, timers, Super Smoke, and more" },
-              { icon: Timer, title: "Cook Automation", desc: "Multi-stage programs with smart triggers" },
+              { icon: ChefHat, title: "Cook Guides", desc: "Pre-built and custom cook programs with smart alerts" },
               { icon: Battery, title: "Pellet Tracking", desc: "Monitor pellet level with low-level alerts" },
             ].map((item) => (
               <Card key={item.title} className="bg-card/50 border-border">
@@ -226,6 +221,29 @@ export default function Dashboard() {
   const mqttConnected = 'mqttConnected' in t && t.mqttConnected;
   const lastUpdate = 'lastUpdate' in t ? (t.lastUpdate as number) : 0;
   const timeSinceUpdate = lastUpdate > 0 ? Math.floor((Date.now() - lastUpdate) / 1000) : -1;
+
+  // Derive meat profile from active cook for graph markers
+  const meatProfileId = activeCook?.session?.meatType
+    ? (() => {
+        const mt = activeCook.session.meatType?.toLowerCase() || "";
+        const cut = activeCook.session.cutName?.toLowerCase() || "";
+        if (cut.includes("brisket")) return "brisket";
+        if (cut.includes("rib") && mt.includes("beef")) return "beef_ribs";
+        if (cut.includes("steak") || cut.includes("ribeye")) return "steak";
+        if (cut.includes("butt") || cut.includes("shoulder")) return "pork_butt";
+        if (cut.includes("pork rib") || cut.includes("baby back")) return "pork_ribs";
+        if (cut.includes("chicken")) return "whole_chicken";
+        if (cut.includes("turkey")) return "turkey";
+        if (cut.includes("salmon")) return "salmon";
+        return mt === "beef" ? "brisket" : mt === "pork" ? "pork_butt" : mt === "poultry" ? "whole_chicken" : undefined;
+      })()
+    : undefined;
+
+  const meatProfile = meatProfileId ? getMeatProfile(meatProfileId) : null;
+
+  const cookStartTime = activeCook?.session?.createdAt
+    ? new Date(activeCook.session.createdAt).getTime()
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -290,6 +308,33 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Active Cook Banner */}
+      {activeCook?.session && (
+        <Card className="bg-primary/5 border-primary/20 cursor-pointer hover:border-primary/40 transition-colors" onClick={() => setLocation("/live-cook")}>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <ChefHat className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <div className="font-semibold text-foreground text-sm flex items-center gap-2">
+                  Live Cook Active
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {activeCook.session.meatType || "Cook"}
+                  {activeCook.session.cutName ? ` — ${activeCook.session.cutName}` : ""}
+                  {cookStartTime && ` · ${Math.floor((Date.now() - cookStartTime) / 60000)}m elapsed`}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-primary text-xs font-mono">
+              View <ArrowRight className="h-3.5 w-3.5" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Temperature Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <TempCard label="Grill" value={t.grill} target={t.set} icon={Flame} color="text-primary" />
@@ -334,11 +379,17 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => setLocation("/controls")} className="font-mono text-xs">
               all controls
             </Button>
+            {!activeCook?.session && (
+              <Button variant="outline" size="sm" onClick={() => setLocation("/cook-guide")} className="font-mono text-xs border-primary/30 text-primary">
+                <ChefHat className="h-3.5 w-3.5 mr-1.5" />
+                start a cook
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Temperature Graph */}
+      {/* Temperature Graph — now using the advanced component */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -348,36 +399,14 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           {chartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis
-                  dataKey="time"
-                  stroke="rgba(255,255,255,0.3)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                />
-                <YAxis
-                  stroke="rgba(255,255,255,0.3)"
-                  tick={{ fontSize: 10, fontFamily: "JetBrains Mono" }}
-                  domain={[0, "auto"]}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "oklch(0.18 0.012 240)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "6px",
-                    fontFamily: "JetBrains Mono",
-                    fontSize: "11px",
-                  }}
-                  labelStyle={{ color: "rgba(255,255,255,0.5)" }}
-                />
-                <Legend wrapperStyle={{ fontFamily: "JetBrains Mono", fontSize: "11px" }} />
-                <Line type="monotone" dataKey="grill" stroke="oklch(0.72 0.14 50)" strokeWidth={2} dot={false} name="Grill" />
-                <Line type="monotone" dataKey="probe" stroke="oklch(0.60 0.18 25)" strokeWidth={2} dot={false} name="Probe" />
-                <Line type="monotone" dataKey="ambient" stroke="oklch(0.65 0.10 220)" strokeWidth={1.5} dot={false} name="Ambient" />
-                <Line type="stepAfter" dataKey="target" stroke="rgba(255,255,255,0.2)" strokeWidth={1} strokeDasharray="5 5" dot={false} name="Target" />
-              </LineChart>
-            </ResponsiveContainer>
+            <TemperatureGraph
+              data={chartData}
+              meatProfile={meatProfile}
+              showAmbient={true}
+              showTarget={true}
+              height={320}
+              cookStartTime={cookStartTime}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-[280px] text-muted-foreground">
               <Thermometer className="h-8 w-8 mb-2 opacity-30" />

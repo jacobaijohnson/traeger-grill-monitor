@@ -26,7 +26,7 @@ import {
   LayoutDashboard,
   SlidersHorizontal,
   BookOpen,
-  Workflow,
+  Flame,
   Clock,
   Settings as SettingsIcon,
   LogOut,
@@ -37,12 +37,14 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { useNotificationPermission, usePWAInstall } from "@/hooks/useNotifications";
+import { Bell, BellOff, Download } from "lucide-react";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: SlidersHorizontal, label: "Controls", path: "/controls" },
   { icon: BookOpen, label: "Cook Guide", path: "/cook-guide" },
-  { icon: Workflow, label: "Automation", path: "/automation" },
+  { icon: Flame, label: "Live Cook", path: "/live-cook" },
   { icon: Clock, label: "History", path: "/history" },
   { icon: SettingsIcon, label: "Settings", path: "/settings" },
 ];
@@ -125,6 +127,53 @@ export default function DashboardLayout({
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
+  );
+}
+
+function NotificationBanner() {
+  const { permission, supported, requestPermission } = useNotificationPermission();
+  const { canInstall, install, isStandalone } = usePWAInstall();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+  const showNotifBanner = supported && permission === "default";
+  const showInstallBanner = canInstall && !isStandalone;
+
+  if (!showNotifBanner && !showInstallBanner) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      {showNotifBanner && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <BellOff className="h-4 w-4 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground font-medium">Enable notifications</p>
+            <p className="text-xs text-muted-foreground">Get alerts when your probe hits target temp or a stall is detected.</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" className="text-xs font-mono" onClick={() => setDismissed(true)}>Later</Button>
+            <Button size="sm" className="text-xs font-mono bg-primary text-primary-foreground" onClick={() => requestPermission()}>
+              <Bell className="h-3.5 w-3.5 mr-1" /> Enable
+            </Button>
+          </div>
+        </div>
+      )}
+      {showInstallBanner && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+          <Download className="h-4 w-4 text-blue-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-foreground font-medium">Install App</p>
+            <p className="text-xs text-muted-foreground">Add to your home screen for a native app experience.</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" className="text-xs font-mono" onClick={() => setDismissed(true)}>Later</Button>
+            <Button size="sm" className="text-xs font-mono bg-blue-500 text-white hover:bg-blue-600" onClick={() => install()}>
+              <Download className="h-3.5 w-3.5 mr-1" /> Install
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -295,7 +344,10 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6">
+          <NotificationBanner />
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

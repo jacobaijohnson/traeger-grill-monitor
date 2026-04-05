@@ -402,7 +402,7 @@ export default function Settings() {
         <CardContent className="space-y-3 text-xs text-muted-foreground">
           <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
             <p>
-              <strong className="text-foreground">PitDeck</strong> is an independent, community-built
+              <strong className="text-foreground">Traeger Smoker Insight</strong> is an independent, community-built
               dashboard for monitoring and controlling WiFIRE-enabled pellet grills. It is{" "}
               <strong className="text-foreground">not affiliated with, endorsed by, or sponsored by
               Traeger Grills LLC</strong> or any of its subsidiaries.
@@ -461,7 +461,7 @@ export default function Settings() {
                   <p>
                     This application depends on Traeger's cloud API, which may change without notice.
                     Traeger may modify, restrict, or discontinue API access at any time. The developers
-                    of PitDeck have no control over Traeger's API availability or behavior.
+                    of Traeger Smoker Insight have no control over Traeger's API availability or behavior.
                   </p>
                 </div>
 
@@ -496,14 +496,14 @@ export default function Settings() {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-foreground text-sm font-mono uppercase tracking-wider">
             <Info className="h-4 w-4 text-muted-foreground" />
-            About PitDeck
+            About Traeger Smoker Insight
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-xs text-muted-foreground">
           <p>
-            PitDeck is an independent, open-source-inspired dashboard that gives you direct control
-            over your WiFIRE-enabled grill. Built by pitmasters, for pitmasters — because you should
-            be able to control the hardware you own.
+            Traeger Smoker Insight is an independent, open-source-inspired dashboard that gives you direct
+            control over your WiFIRE-enabled grill. Built by pitmasters, for pitmasters — because you
+            should be able to control the hardware you own.
           </p>
           <Separator />
           <div className="grid grid-cols-2 gap-3">

@@ -120,3 +120,9 @@
 - [x] Auto-refresh MQTT signed URL before expiry
 - [ ] Tighten Cook Guide → Automation flow (Start Cook button creates and launches automation)
 - [ ] Merge Cook Guide and Automation into unified workflow
+
+## Rename to Traeger Smoker Insight
+- [x] Update DashboardLayout sidebar branding to "Traeger Smoker Insight"
+- [x] Update index.html title to "Traeger Smoker Insight"
+- [x] Update Settings page branding references
+- [x] Update any other page references from PitDeck to Traeger Smoker Insight

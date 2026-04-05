@@ -76,23 +76,24 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-4">
-            {/* PitDeck Logo — industrial gauge icon */}
+            {/* Traeger Smoker Insight Logo */}
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center">
                 <Gauge className="h-7 w-7 text-primary" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
-                  PitDeck
+                  Smoker Insight
                 </h1>
                 <p className="text-xs text-muted-foreground font-mono tracking-wider uppercase">
-                  Open Grill Control
+                  Traeger Grill Command
                 </p>
               </div>
             </div>
             <p className="text-sm text-muted-foreground text-center max-w-sm mt-2">
-              An independent, open-source dashboard for monitoring and controlling
-              WiFi-enabled pellet grills. Built by pitmasters, for pitmasters.
+              An independent dashboard for monitoring and controlling your
+              Traeger WiFIRE grill. Real-time telemetry, smart cook automation,
+              and the control Traeger's app should have given you.
             </p>
           </div>
           <Button
@@ -202,7 +203,7 @@ function DashboardLayoutContent({
                 <div className="flex items-center gap-2 min-w-0">
                   <Gauge className="h-5 w-5 text-primary shrink-0" />
                   <span className="font-semibold tracking-tight truncate text-foreground font-mono text-sm">
-                    PitDeck
+                    Smoker Insight
                   </span>
                 </div>
               ) : null}

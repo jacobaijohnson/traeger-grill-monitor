@@ -128,10 +128,16 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="mt-4 text-center">
+            <div className="mt-4 space-y-2 text-center">
+              <button
+                onClick={() => setLocation("/forgot-password")}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors block w-full"
+              >
+                Forgot your password?
+              </button>
               <button
                 onClick={() => setLocation("/register")}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors block w-full"
               >
                 Don't have an account?{" "}
                 <span className="text-primary font-medium">Create one</span>

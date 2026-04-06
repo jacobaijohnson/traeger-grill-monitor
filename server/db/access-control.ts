@@ -167,63 +167,64 @@ export async function listAllowlist() {
 }
 
 // ─── User Management (via Better Auth tables) ──────────
+// NOTE: Better Auth tables (user, session, account) are not in the Drizzle schema,
+// so we use parameterized SQL via drizzle-orm's sql`` template tag.
 
 export async function listAllUsers() {
   return withDbRetry(async (db) => {
-    const rows = await db.execute(sql.raw(
-      `SELECT id, name, email, role, banned, banReason, createdAt, updatedAt FROM user ORDER BY createdAt DESC`
-    ));
+    const rows = await db.execute(
+      sql`SELECT id, name, email, role, banned, banReason, createdAt, updatedAt FROM user ORDER BY createdAt DESC`
+    );
     return (rows as any)[0] || [];
   });
 }
 
 export async function updateUserRole(userId: string, role: string): Promise<void> {
   await withDbRetry(async (db) => {
-    await db.execute(sql.raw(
-      `UPDATE user SET role = '${role}', updatedAt = NOW() WHERE id = '${userId}'`
-    ));
+    await db.execute(
+      sql`UPDATE user SET role = ${role}, updatedAt = NOW() WHERE id = ${userId}`
+    );
   });
 }
 
 export async function banUser(userId: string, reason?: string): Promise<void> {
   await withDbRetry(async (db) => {
-    const banReason = reason ? `'${reason.replace(/'/g, "''")}'` : "NULL";
-    await db.execute(sql.raw(
-      `UPDATE user SET banned = 1, banReason = ${banReason}, updatedAt = NOW() WHERE id = '${userId}'`
-    ));
+    await db.execute(
+      sql`UPDATE user SET banned = 1, banReason = ${reason ?? null}, updatedAt = NOW() WHERE id = ${userId}`
+    );
   });
 }
 
 export async function unbanUser(userId: string): Promise<void> {
   await withDbRetry(async (db) => {
-    await db.execute(sql.raw(
-      `UPDATE user SET banned = 0, banReason = NULL, updatedAt = NOW() WHERE id = '${userId}'`
-    ));
+    await db.execute(
+      sql`UPDATE user SET banned = 0, banReason = NULL, updatedAt = NOW() WHERE id = ${userId}`
+    );
   });
 }
 
 export async function deleteUser(userId: string): Promise<void> {
   await withDbRetry(async (db) => {
-    // Delete from Better Auth tables
-    await db.execute(sql.raw(`DELETE FROM session WHERE userId = '${userId}'`));
-    await db.execute(sql.raw(`DELETE FROM account WHERE userId = '${userId}'`));
-    await db.execute(sql.raw(`DELETE FROM user WHERE id = '${userId}'`));
+    // Delete from Better Auth tables in dependency order
+    await db.execute(sql`DELETE FROM session WHERE userId = ${userId}`);
+    await db.execute(sql`DELETE FROM account WHERE userId = ${userId}`);
+    await db.execute(sql`DELETE FROM user WHERE id = ${userId}`);
   });
 }
 
 export async function getPendingUsers() {
   return withDbRetry(async (db) => {
-    const rows = await db.execute(sql.raw(
-      `SELECT id, name, email, createdAt FROM user WHERE banned = 1 AND banReason = 'pending_approval' ORDER BY createdAt DESC`
-    ));
+    const rows = await db.execute(
+      sql`SELECT id, name, email, createdAt FROM user WHERE banned = 1 AND banReason = 'pending_approval' ORDER BY createdAt DESC`
+    );
     return (rows as any)[0] || [];
   });
 }
 
 export async function approveUser(userId: string): Promise<void> {
   await withDbRetry(async (db) => {
-    await db.execute(sql.raw(
-      `UPDATE user SET banned = 0, banReason = NULL, updatedAt = NOW() WHERE id = '${userId}'`
-    ));
+    await db.execute(
+      sql`UPDATE user SET banned = 0, banReason = NULL, updatedAt = NOW() WHERE id = ${userId}`
+    );
   });
 }

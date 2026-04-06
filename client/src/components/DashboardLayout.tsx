@@ -29,6 +29,7 @@ import {
   Clock,
   BarChart3,
   Settings as SettingsIcon,
+  ShieldAlert,
   LogOut,
   PanelLeft,
   Terminal,
@@ -50,6 +51,10 @@ const menuItems = [
   { icon: Clock, label: "History", path: "/history" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
   { icon: SettingsIcon, label: "Settings", path: "/settings" },
+];
+
+const adminMenuItems = [
+  { icon: ShieldAlert, label: "Admin", path: "/admin" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -279,6 +284,24 @@ function DashboardLayoutContent({
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
                       />
                       <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+              {user?.role === "admin" && adminMenuItems.map((item) => {
+                const isActive = location === item.path;
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className="h-10 transition-all font-normal"
+                    >
+                      <item.icon
+                        className={`h-4 w-4 ${isActive ? "text-red-400" : "text-red-400/60"}`}
+                      />
+                      <span className="text-red-400/80">{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

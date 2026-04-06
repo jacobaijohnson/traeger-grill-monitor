@@ -27,6 +27,7 @@ import {
   automationRouter,
   analyticsRouter,
   executionsRouter,
+  adminRouter,
 } from "./routers/index";
 
 export const appRouter = router({
@@ -58,6 +59,7 @@ export const appRouter = router({
   automation: automationRouter,
   analytics: analyticsRouter,
   executions: executionsRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

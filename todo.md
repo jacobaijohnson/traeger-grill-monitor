@@ -478,3 +478,43 @@
 - [x] Choose port 8420 (IANA unassigned, no homelab conflicts, BBQ/smoke vibe)
 - [x] Update all references (Dockerfile, docker-compose.yml, s6 scripts, ENV_TEMPLATE)
 - [x] Provide production-ready docker-compose.yml example for README/git
+
+## Admin Settings Panel UI
+- [x] Build admin settings page with tabbed layout (Users, Registration, Invites, Allowlist)
+- [x] Users tab: list all users with role badges, ban/unban, promote/demote, delete
+- [x] Registration tab: mode selector (closed/invite/allowlist/open), save to app_settings
+- [x] Invites tab: create invite codes, list active/used/expired, copy-to-clipboard, delete
+- [x] Allowlist tab: add/remove email patterns, list current entries
+- [x] Wire admin-only routes in sidebar (visible only to admin role)
+- [x] Add admin guard on settings routes (redirect non-admins)
+
+## Forgot Password Flow
+- [x] Build Forgot Password page (email input form)
+- [x] Build Reset Password page (new password form with token from URL)
+- [x] Configure Better Auth email transport (forgetPassword plugin with optional SMTP)
+- [x] Add forgot password link on Login page
+- [x] Handle reset token validation and error states
+
+## Docker Image Optimization
+- [x] Analyze dependencies with depcheck to find unused packages
+- [x] Remove unused dependencies from package.json (jose, cookie, framer-motion, @aws-sdk, streamdown+mermaid, date-fns, react-hook-form, etc.)
+- [x] Verify all features still work after pruning (324 tests pass)
+- [x] Rebuild Docker image and measure size reduction (131MB → 86MB content, 519MB → 256MB node_modules)
+
+## Pre-GitHub Architecture Review
+- [x] Audit all dependencies (package.json) for necessity, security, and version currency
+- [x] Review file structure for dead code, unused imports, orphaned files
+- [x] Verify all server routers follow consistent patterns
+- [x] Check all DB helpers for SQL injection safety and proper error handling (fixed SQL injection in access-control.ts)
+- [x] Verify Docker build produces minimal, correct image (86MB content)
+- [x] Ensure all env vars are documented and consistently used (ENV_TEMPLATE.md)
+- [x] Check for hardcoded secrets, URLs, or dev-only code
+- [x] Verify TypeScript strict mode compliance (0 errors)
+- [x] Review frontend auth flow end-to-end
+- [x] Confirm Better Auth is used correctly per its docs
+- [x] Finish forgot password frontend pages
+- [x] Fix any TS errors in ForgotPassword/ResetPassword pages
+- [x] Remove dead Manus OAuth code (ManusDialog, ComponentShowcase, manusTypes)
+- [x] Prune unused dependencies from Docker image
+- [x] Write production-ready README.md for GitHub (LSIO-style)
+- [x] Final Docker build and test (324 tests pass, image builds clean)

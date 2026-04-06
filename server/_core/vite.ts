@@ -1,26 +1,41 @@
 import express, { type Express } from "express";
 import fs from "fs";
 import { type Server } from "http";
-import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
+/**
+ * Dev-only: sets up Vite dev server with HMR.
+ * Uses dynamic imports so vite + vite.config are NOT bundled into the production build.
+ * The entire function body is guarded by NODE_ENV check at the call site (index.ts).
+ */
 export async function setupVite(app: Express, server: Server) {
+  // Dynamic imports — these packages only exist in devDependencies
+  const vite = await import("vite");
+  const { nanoid } = await import("nanoid");
+
+  // Load vite config dynamically using Vite's own config loader
+  // This avoids esbuild inlining vite.config.ts into the production bundle
+  const resolved = await vite.loadConfigFromFile(
+    { command: "serve", mode: "development" },
+    path.resolve(import.meta.dirname, "../../vite.config.ts")
+  );
+
+  const viteConfig = resolved?.config ?? {};
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },
     allowedHosts: true as const,
   };
 
-  const vite = await createViteServer({
+  const viteServer = await vite.createServer({
     ...viteConfig,
     configFile: false,
     server: serverOptions,
     appType: "custom",
   });
 
-  app.use(vite.middlewares);
+  app.use(viteServer.middlewares);
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
@@ -32,16 +47,15 @@ export async function setupVite(app: Express, server: Server) {
         "index.html"
       );
 
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
-      const page = await vite.transformIndexHtml(url, template);
+      const page = await viteServer.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
+      viteServer.ssrFixStacktrace(e as Error);
       next(e);
     }
   });

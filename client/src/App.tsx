@@ -12,8 +12,11 @@ import LiveCook from "./pages/LiveCook";
 import History from "./pages/History";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import AdminSettings from "./pages/AdminSettings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
@@ -22,6 +25,8 @@ function Router() {
       {/* Public auth routes — outside DashboardLayout */}
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
+      <Route path={"/forgot-password"} component={ForgotPassword} />
+      <Route path={"/reset-password"} component={ResetPassword} />
 
       {/* Authenticated dashboard routes */}
       <Route>
@@ -39,6 +44,7 @@ function Router() {
               <Route path={"/history"} component={History} />
               <Route path={"/analytics"} component={Analytics} />
               <Route path={"/settings"} component={Settings} />
+              <Route path={"/admin"} component={AdminSettings} />
               <Route path={"/404"} component={NotFound} />
               <Route component={NotFound} />
             </Switch>

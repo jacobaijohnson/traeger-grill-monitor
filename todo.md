@@ -229,3 +229,8 @@
 - [x] Smart alerts: temp deviation, probe fell out, predictive stall (via SSE push + MQTT disconnect notification)
 - [x] Export cook session data as CSV
 - [x] Mobile-responsive optimizations (touch swipe for timeline navigation)
+
+## Cook Guide Search
+- [x] Add text search bar to Cook Guide that filters by name, cut, method, and description across all tabs
+- [x] Fix DB ECONNRESET errors in MQTT telemetry persist — RC-1: mysql2 pool with keepAlive + withDbRetry wrapper
+- [x] Audit and fix all race conditions: RC-1 DB pool+retry, RC-2 connection mutex, RC-3 disconnect cleanup order, RC-4 persist backpressure

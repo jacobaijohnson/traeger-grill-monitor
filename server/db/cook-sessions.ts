@@ -1,4 +1,4 @@
-import { getDb, eq, and, desc } from "./connection";
+import { getDb, withDbRetry, eq, and, desc } from "./connection";
 import {
   cookSessions,
   cookAlerts,
@@ -9,68 +9,70 @@ import {
 // ===== Cook Sessions =====
 
 export async function createCookSession(data: InsertCookSession) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(cookSessions).values(data);
-  return result[0].insertId;
+  const result = await withDbRetry(async (db) => {
+    const insertResult = await db.insert(cookSessions).values(data);
+    return insertResult[0].insertId;
+  }, "createCookSession");
+  if (result === null) throw new Error("Database not available");
+  return result;
 }
 
 export async function endCookSession(id: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return;
-  const conditions = userId
-    ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
-    : eq(cookSessions.id, id);
-  await db.update(cookSessions).set({ endedAt: new Date() }).where(conditions);
+  await withDbRetry(async (db) => {
+    const conditions = userId
+      ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
+      : eq(cookSessions.id, id);
+    await db.update(cookSessions).set({ endedAt: new Date() }).where(conditions);
+  }, "endCookSession");
 }
 
 export async function updateCookSessionNotes(id: number, notes: string, rating?: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return;
-  const updateData: Record<string, unknown> = { notes };
-  if (rating !== undefined) updateData.rating = rating;
-  const conditions = userId
-    ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
-    : eq(cookSessions.id, id);
-  await db.update(cookSessions).set(updateData).where(conditions);
+  await withDbRetry(async (db) => {
+    const updateData: Record<string, unknown> = { notes };
+    if (rating !== undefined) updateData.rating = rating;
+    const conditions = userId
+      ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
+      : eq(cookSessions.id, id);
+    await db.update(cookSessions).set(updateData).where(conditions);
+  }, "updateCookSessionNotes");
 }
 
 export async function getUserCookSessions(userId: number, limit = 50) {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(cookSessions)
-    .where(eq(cookSessions.userId, userId))
-    .orderBy(desc(cookSessions.startedAt))
-    .limit(limit);
+  return await withDbRetry(async (db) => {
+    return db
+      .select()
+      .from(cookSessions)
+      .where(eq(cookSessions.userId, userId))
+      .orderBy(desc(cookSessions.startedAt))
+      .limit(limit);
+  }, "getUserCookSessions") ?? [];
 }
 
 export async function getCookSession(id: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const conditions = userId
-    ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
-    : eq(cookSessions.id, id);
-  const result = await db.select().from(cookSessions).where(conditions).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return await withDbRetry(async (db) => {
+    const conditions = userId
+      ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
+      : eq(cookSessions.id, id);
+    const result = await db.select().from(cookSessions).where(conditions).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  }, "getCookSession");
 }
 
 export async function getActiveCookSession(userId: number) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db
-    .select()
-    .from(cookSessions)
-    .where(
-      and(
-        eq(cookSessions.userId, userId),
-        eq(cookSessions.status, "active")
+  return await withDbRetry(async (db) => {
+    const result = await db
+      .select()
+      .from(cookSessions)
+      .where(
+        and(
+          eq(cookSessions.userId, userId),
+          eq(cookSessions.status, "active")
+        )
       )
-    )
-    .orderBy(desc(cookSessions.startedAt))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
+      .orderBy(desc(cookSessions.startedAt))
+      .limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  }, "getActiveCookSession");
 }
 
 export async function updateCookSessionStatus(
@@ -78,48 +80,50 @@ export async function updateCookSessionStatus(
   status: string,
   extras?: { endedAt?: Date; peakGrillTemp?: number; peakProbeTemp?: number; currentStage?: number }
 ) {
-  const db = await getDb();
-  if (!db) return;
-  const updateData: Record<string, unknown> = { status };
-  if (extras?.endedAt) updateData.endedAt = extras.endedAt;
-  if (extras?.peakGrillTemp !== undefined) updateData.peakGrillTemp = extras.peakGrillTemp;
-  if (extras?.peakProbeTemp !== undefined) updateData.peakProbeTemp = extras.peakProbeTemp;
-  if (extras?.currentStage !== undefined) updateData.currentStage = extras.currentStage;
-  await db.update(cookSessions).set(updateData).where(eq(cookSessions.id, id));
+  await withDbRetry(async (db) => {
+    const updateData: Record<string, unknown> = { status };
+    if (extras?.endedAt) updateData.endedAt = extras.endedAt;
+    if (extras?.peakGrillTemp !== undefined) updateData.peakGrillTemp = extras.peakGrillTemp;
+    if (extras?.peakProbeTemp !== undefined) updateData.peakProbeTemp = extras.peakProbeTemp;
+    if (extras?.currentStage !== undefined) updateData.currentStage = extras.currentStage;
+    await db.update(cookSessions).set(updateData).where(eq(cookSessions.id, id));
+  }, "updateCookSessionStatus");
 }
 
 export async function updateCookSessionAlerts(id: number, alertsJson: string) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(cookSessions).set({ alertsJson }).where(eq(cookSessions.id, id));
+  await withDbRetry(async (db) => {
+    await db.update(cookSessions).set({ alertsJson }).where(eq(cookSessions.id, id));
+  }, "updateCookSessionAlerts");
 }
 
 export async function updateCookSessionStages(id: number, stagesJson: string, currentStage: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db.update(cookSessions).set({ stagesJson, currentStage }).where(eq(cookSessions.id, id));
+  await withDbRetry(async (db) => {
+    await db.update(cookSessions).set({ stagesJson, currentStage }).where(eq(cookSessions.id, id));
+  }, "updateCookSessionStages");
 }
 
 // ===== Cook Alerts =====
 
 export async function insertCookAlert(data: InsertCookAlert) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  const result = await db.insert(cookAlerts).values(data);
-  return result[0].insertId;
+  const result = await withDbRetry(async (db) => {
+    const insertResult = await db.insert(cookAlerts).values(data);
+    return insertResult[0].insertId;
+  }, "insertCookAlert");
+  if (result === null) throw new Error("Database not available");
+  return result;
 }
 
 export async function getCookAlertsForSession(cookSessionId: number, userId?: number) {
-  const db = await getDb();
-  if (!db) return [];
-  const conditions = userId
-    ? and(eq(cookAlerts.cookSessionId, cookSessionId), eq(cookAlerts.userId, userId))
-    : eq(cookAlerts.cookSessionId, cookSessionId);
-  return db
-    .select()
-    .from(cookAlerts)
-    .where(conditions)
-    .orderBy(cookAlerts.triggerTemp);
+  return await withDbRetry(async (db) => {
+    const conditions = userId
+      ? and(eq(cookAlerts.cookSessionId, cookSessionId), eq(cookAlerts.userId, userId))
+      : eq(cookAlerts.cookSessionId, cookSessionId);
+    return db
+      .select()
+      .from(cookAlerts)
+      .where(conditions)
+      .orderBy(cookAlerts.triggerTemp);
+  }, "getCookAlertsForSession") ?? [];
 }
 
 export async function updateCookAlertStatus(
@@ -128,19 +132,19 @@ export async function updateCookAlertStatus(
   firedAt?: Date,
   dismissedAt?: Date
 ) {
-  const db = await getDb();
-  if (!db) return;
-  const updateData: Record<string, unknown> = { status };
-  if (firedAt) updateData.firedAt = firedAt;
-  if (dismissedAt) updateData.dismissedAt = dismissedAt;
-  await db.update(cookAlerts).set(updateData).where(eq(cookAlerts.id, id));
+  await withDbRetry(async (db) => {
+    const updateData: Record<string, unknown> = { status };
+    if (firedAt) updateData.firedAt = firedAt;
+    if (dismissedAt) updateData.dismissedAt = dismissedAt;
+    await db.update(cookAlerts).set(updateData).where(eq(cookAlerts.id, id));
+  }, "updateCookAlertStatus");
 }
 
 export async function dismissCookAlert(id: number) {
-  const db = await getDb();
-  if (!db) return;
-  await db
-    .update(cookAlerts)
-    .set({ status: "dismissed", dismissedAt: new Date() })
-    .where(eq(cookAlerts.id, id));
+  await withDbRetry(async (db) => {
+    await db
+      .update(cookAlerts)
+      .set({ status: "dismissed", dismissedAt: new Date() })
+      .where(eq(cookAlerts.id, id));
+  }, "dismissCookAlert");
 }

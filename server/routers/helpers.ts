@@ -26,6 +26,10 @@ import {
 } from "../mqtt-manager";
 import { COMMANDS } from "@shared/traeger-types";
 
+// ─── RC-2 Fix: Per-user connection mutex ───────────────────
+// Prevents concurrent ensureMqttConnected calls from racing
+const connectionLocks = new Map<number, Promise<void>>();
+
 /**
  * Get a valid idToken for the user, refreshing if needed.
  */
@@ -49,12 +53,37 @@ export async function getValidIdToken(userId: number): Promise<{ idToken: string
 
 /**
  * Ensure MQTT is connected and DB persistence is wired.
+ * RC-2: Uses a per-user mutex so only one connection attempt runs at a time.
+ * Subsequent callers wait for the first to finish rather than racing.
  */
 export async function ensureMqttConnected(userId: number) {
   const { idToken, session } = await getValidIdToken(userId);
   if (!session.selectedGrillId) return { idToken, session };
 
   if (!isMqttConnected(userId) || needsUrlRefresh(userId)) {
+    // RC-2: Wait for any in-progress connection attempt for this user
+    const existingLock = connectionLocks.get(userId);
+    if (existingLock) {
+      try {
+        await existingLock;
+      } catch {
+        // Previous attempt failed, we'll try again below
+      }
+      // After waiting, re-check if connection is now established
+      if (isMqttConnected(userId) && !needsUrlRefresh(userId)) {
+        return { idToken, session };
+      }
+    }
+
+    // RC-2: Acquire the lock — create a promise that resolves when we're done
+    let releaseLock: () => void;
+    let rejectLock: (err: unknown) => void;
+    const lockPromise = new Promise<void>((resolve, reject) => {
+      releaseLock = resolve;
+      rejectLock = reject;
+    });
+    connectionLocks.set(userId, lockPromise);
+
     try {
       const creds = await traegerGetMqttCredentials(idToken, session.selectedGrillId);
       const expiresAt = Date.now() + creds.expirationSeconds * 1000;
@@ -69,7 +98,7 @@ export async function ensureMqttConnected(userId: number) {
         if (!sess?.selectedGrillId) return;
         await persistTelemetryFromMqtt(uid, telemetry, sess.selectedGrillId, cookSessionId);
       });
-      // P0-INT: Wire cook state persistence callback
+      // Wire cook state persistence callback
       setCookStatePersistCallback(userId, async (uid, cook) => {
         try {
           await updateCookSessionStatus(cook.cookSessionId, "active", {
@@ -92,7 +121,7 @@ export async function ensureMqttConnected(userId: number) {
       } catch (err) {
         console.error("[Telemetry] Failed to hydrate history:", err);
       }
-      // P0-INT: Hydrate active cook state from DB if one exists
+      // Hydrate active cook state from DB if one exists
       try {
         const activeCook = await getActiveCookSession(userId);
         if (activeCook) {
@@ -120,8 +149,18 @@ export async function ensureMqttConnected(userId: number) {
       try {
         await traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);
       } catch { /* non-critical */ }
+
+      releaseLock!();
     } catch (err) {
+      rejectLock!(err);
       console.error("[Telemetry] Failed to connect MQTT:", err);
+    } finally {
+      // Clean up the lock after a short delay to prevent immediate re-entry
+      setTimeout(() => {
+        if (connectionLocks.get(userId) === lockPromise) {
+          connectionLocks.delete(userId);
+        }
+      }, 1000);
     }
   }
   return { idToken, session };

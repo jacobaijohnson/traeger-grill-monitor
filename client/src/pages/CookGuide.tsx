@@ -54,6 +54,7 @@ import {
   BellRing,
   AlertTriangle,
   ArrowRight,
+  Search,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
@@ -480,6 +481,7 @@ export default function CookGuide() {
   // State
   const [activeTab, setActiveTab] = useState("library");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<CookTemplate | null>(null);
   const [selectedCustom, setSelectedCustom] = useState<CustomTemplateRow | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -549,11 +551,57 @@ export default function CookGuide() {
     setNewTips("");
   };
 
+  const matchesSearch = (text: string | null | undefined) => {
+    if (!searchQuery.trim()) return true;
+    if (!text) return false;
+    return text.toLowerCase().includes(searchQuery.toLowerCase());
+  };
+
   const filteredTemplates = useMemo(() => {
     if (!templates) return [];
-    if (selectedCategory === "all") return templates;
-    return templates.filter((t) => t.category === selectedCategory);
-  }, [templates, selectedCategory]);
+    let result = templates;
+    if (selectedCategory !== "all") {
+      result = result.filter((t) => t.category === selectedCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.cut.toLowerCase().includes(q) ||
+        t.method.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [templates, selectedCategory, searchQuery]);
+
+  const filteredMyTemplates = useMemo(() => {
+    if (!myTemplates) return [];
+    if (!searchQuery.trim()) return myTemplates;
+    const q = searchQuery.toLowerCase();
+    return myTemplates.filter((t) =>
+      t.name.toLowerCase().includes(q) ||
+      (t.meatCut && t.meatCut.toLowerCase().includes(q)) ||
+      t.method.toLowerCase().includes(q) ||
+      (t.description && t.description.toLowerCase().includes(q)) ||
+      t.category.toLowerCase().includes(q)
+    );
+  }, [myTemplates, searchQuery]);
+
+  const filteredCommunityTemplates = useMemo(() => {
+    if (!communityTemplates) return [];
+    if (!searchQuery.trim()) return communityTemplates;
+    const q = searchQuery.toLowerCase();
+    return communityTemplates.filter((t) =>
+      t.name.toLowerCase().includes(q) ||
+      (t.meatCut && t.meatCut.toLowerCase().includes(q)) ||
+      t.method.toLowerCase().includes(q) ||
+      (t.description && t.description.toLowerCase().includes(q)) ||
+      t.category.toLowerCase().includes(q) ||
+      (t.authorName && t.authorName.toLowerCase().includes(q))
+    );
+  }, [communityTemplates, searchQuery]);
 
   const handleCreate = () => {
     if (!newName.trim()) { toast.error("Template name is required"); return; }
@@ -651,6 +699,25 @@ export default function CookGuide() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search templates by name, cut, method..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 bg-secondary border-border font-mono text-sm placeholder:text-muted-foreground/50"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-secondary">
@@ -676,19 +743,24 @@ export default function CookGuide() {
           </div>
           {filteredTemplates.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              <Flame className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm font-mono">No templates in this category.</p>
+              {searchQuery ? <Search className="h-8 w-8 mx-auto mb-2 opacity-30" /> : <Flame className="h-8 w-8 mx-auto mb-2 opacity-30" />}
+              <p className="text-sm font-mono">{searchQuery ? `No templates match "${searchQuery}"` : "No templates in this category."}</p>
             </div>
           )}
         </TabsContent>
 
         {/* My Templates Tab */}
         <TabsContent value="mine" className="space-y-4">
-          {myTemplates && myTemplates.length > 0 ? (
+          {filteredMyTemplates.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {myTemplates.map((template) => (
+              {filteredMyTemplates.map((template) => (
                 <CustomTemplateCard key={template.id} template={template} onSelect={() => setSelectedCustom(template)} />
               ))}
+            </div>
+          ) : myTemplates && myTemplates.length > 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm font-mono">No templates match "{searchQuery}"</p>
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
@@ -701,11 +773,16 @@ export default function CookGuide() {
 
         {/* Community Tab */}
         <TabsContent value="community" className="space-y-4">
-          {communityTemplates && communityTemplates.length > 0 ? (
+          {filteredCommunityTemplates.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {communityTemplates.map((template) => (
+              {filteredCommunityTemplates.map((template) => (
                 <CustomTemplateCard key={template.id} template={template} onSelect={() => setSelectedCustom(template)} showAuthor />
               ))}
+            </div>
+          ) : communityTemplates && communityTemplates.length > 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm font-mono">No templates match "{searchQuery}"</p>
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground">

@@ -46,6 +46,9 @@ interface MqttSession {
   dbPersistInterval: ReturnType<typeof setInterval> | null;
   dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
   cookStatePersistCallback: ((userId: number, cook: ActiveCookSession) => Promise<void>) | null;
+  // RC-4: Backpressure flag — skip persist if previous one is still in flight
+  persistInFlight: boolean;
+  cookStatePersistInFlight: boolean;
 }
 
 // In-memory store of active MQTT sessions keyed by userId
@@ -208,6 +211,8 @@ export function connectMqtt(
     dbPersistInterval: null,
     dbPersistCallback: existing?.dbPersistCallback || null,
     cookStatePersistCallback: existing?.cookStatePersistCallback || null,
+    persistInFlight: false,
+    cookStatePersistInFlight: false,
   };
 
   sessions.set(userId, session);
@@ -277,10 +282,15 @@ export function connectMqtt(
           const cook = session.activeCook;
           // Debounce: only persist state changes every 5th message or on alert fire
           const shouldPersistState = (session.history.length % 5 === 0) || newlyFired.length > 0;
-          if (shouldPersistState && session.cookStatePersistCallback) {
-            session.cookStatePersistCallback(userId, cook).catch((e: unknown) => {
-              console.error(`[MQTT] User ${userId}: Cook state persist error:`, e);
-            });
+          if (shouldPersistState && session.cookStatePersistCallback && !session.cookStatePersistInFlight) {
+            session.cookStatePersistInFlight = true;
+            session.cookStatePersistCallback(userId, cook)
+              .catch((e: unknown) => {
+                console.error(`[MQTT] User ${userId}: Cook state persist error:`, e);
+              })
+              .finally(() => {
+                session.cookStatePersistInFlight = false;
+              });
           }
         }
 
@@ -322,9 +332,14 @@ export function connectMqtt(
       console.log(`[MQTT] User ${userId}: Client offline`);
     });
 
-    // Set up periodic DB persistence (every 30 seconds)
+    // RC-4: Set up periodic DB persistence (every 30 seconds) with backpressure
     session.dbPersistInterval = setInterval(async () => {
+      if (session.persistInFlight) {
+        console.log(`[MQTT] User ${userId}: Skipping DB persist — previous still in flight`);
+        return;
+      }
       if (session.dbPersistCallback && session.telemetry.connected && session.telemetry.grill > 0) {
+        session.persistInFlight = true;
         try {
           await session.dbPersistCallback(
             userId,
@@ -333,6 +348,8 @@ export function connectMqtt(
           );
         } catch (err) {
           console.error(`[MQTT] User ${userId}: DB persist error:`, err);
+        } finally {
+          session.persistInFlight = false;
         }
       }
     }, 30000);
@@ -347,15 +364,22 @@ export function connectMqtt(
 export function disconnectMqtt(userId: number): void {
   const session = sessions.get(userId);
   if (session) {
+    // RC-3: Clear interval FIRST to prevent it firing during teardown
     if (session.dbPersistInterval) {
       clearInterval(session.dbPersistInterval);
+      session.dbPersistInterval = null;
     }
+    // Null out callbacks to prevent any in-flight persist from writing after disconnect
+    session.dbPersistCallback = null;
+    session.cookStatePersistCallback = null;
+    // Now close the MQTT client
     if (session.client) {
       try { session.client.end(true); } catch { /* ignore */ }
       session.client = null;
     }
+    // Finally remove from the map
+    sessions.delete(userId);
   }
-  sessions.delete(userId);
 }
 
 // ─── Telemetry Getters ──────────────────────────────────

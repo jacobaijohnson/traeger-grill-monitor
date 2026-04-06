@@ -676,7 +676,7 @@ export default function LiveCook() {
   return (
     <IdleState
       onConfigure={() => setPageState("configure")}
-      onBrowse={() => setLocation("/cook-guide")}
+      onBrowse={() => setLocation("/cook-programs")}
     />
   );
 }

@@ -25,7 +25,6 @@ import {
   Gauge,
   LayoutDashboard,
   SlidersHorizontal,
-  BookOpen,
   Flame,
   Clock,
   BarChart3,
@@ -46,8 +45,7 @@ import GrillSwitcher from "./GrillSwitcher";
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: SlidersHorizontal, label: "Controls", path: "/controls" },
-  { icon: BookOpen, label: "Cook Guide", path: "/cook-guide" },
-  { icon: Workflow, label: "Automation", path: "/automation" },
+  { icon: Workflow, label: "Cook Programs", path: "/cook-programs" },
   { icon: Flame, label: "Live Cook", path: "/live-cook" },
   { icon: Clock, label: "History", path: "/history" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },

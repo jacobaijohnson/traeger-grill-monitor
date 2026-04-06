@@ -391,7 +391,7 @@ export default function Dashboard() {
               all controls
             </Button>
             {!activeCook?.session && (
-              <Button variant="outline" size="sm" onClick={() => setLocation("/cook-guide")} className="font-mono text-xs border-primary/30 text-primary">
+              <Button variant="outline" size="sm" onClick={() => setLocation("/cook-programs")} className="font-mono text-xs border-primary/30 text-primary">
                 <ChefHat className="h-3.5 w-3.5 mr-1.5" />
                 start a cook
               </Button>

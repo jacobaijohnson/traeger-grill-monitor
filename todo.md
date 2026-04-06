@@ -324,3 +324,15 @@
 - [x] Add collapsible sections that remember state (Collapsible components, no forced popups)
 - [x] Add contextual education: useFirstUseHint hook, localStorage-persisted, auto-dismiss
 - [x] Mobile-first responsive breakpoints across all Automation components (useIsMobile + responsive classes)
+
+## Merge Cook Guide + Automation → Unified "Cook Programs" Page
+- [x] Design unified Cook Programs page architecture (library + builder + execution in one flow)
+- [x] Build unified CookPrograms.tsx page merging preset library, custom templates, community sharing, and live execution
+- [x] Build visual program builder GUI: step-by-step editor with trigger/action pickers, compound trigger config, variable definitions
+- [x] Migrate legacy CookStage templates into CookProgram format for unified display (template-bridge.ts)
+- [x] Add educational content (tips, pro tips, meat science) inline with program steps
+- [x] Update sidebar navigation: replace Cook Guide + Automation with single "Cook Programs" entry
+- [x] Update App.tsx routing: /cook-programs as primary route, redirect old routes
+- [x] Clean up old CookGuide.tsx and Automation.tsx (kept as reference, routes redirect)
+- [x] Update Live Cook page to link back to Cook Programs instead of Cook Guide
+- [x] Write tests for unified page and builder (13 tests, 235 total pass)

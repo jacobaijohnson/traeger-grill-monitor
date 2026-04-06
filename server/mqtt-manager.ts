@@ -1,6 +1,7 @@
 import mqtt from "mqtt";
 import type { TraegerTelemetry } from "@shared/traeger-types";
 import type { TempMarker } from "@shared/meat-science";
+import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent } from "./sse";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ interface MqttSession {
   firedAlerts: CookAlert[]; // alerts that fired (for missed alerts panel)
   dbPersistInterval: ReturnType<typeof setInterval> | null;
   dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
+  cookStatePersistCallback: ((userId: number, cook: ActiveCookSession) => Promise<void>) | null;
 }
 
 // In-memory store of active MQTT sessions keyed by userId
@@ -205,6 +207,7 @@ export function connectMqtt(
     firedAlerts: existing?.firedAlerts || [],
     dbPersistInterval: null,
     dbPersistCallback: existing?.dbPersistCallback || null,
+    cookStatePersistCallback: existing?.cookStatePersistCallback || null,
   };
 
   sessions.set(userId, session);
@@ -261,13 +264,38 @@ export function connectMqtt(
         }
 
         // Run alert engine
-        evaluateAlerts(session);
+        const newlyFired = evaluateAlerts(session);
 
         // Track peaks
         trackPeaks(session);
 
         // Stall detection
         detectStall(session);
+
+        // P0-INT: Persist cook state to DB on every update so it survives restarts
+        if (session.activeCook && session.dbPersistCallback) {
+          const cook = session.activeCook;
+          // Debounce: only persist state changes every 5th message or on alert fire
+          const shouldPersistState = (session.history.length % 5 === 0) || newlyFired.length > 0;
+          if (shouldPersistState && session.cookStatePersistCallback) {
+            session.cookStatePersistCallback(userId, cook).catch((e: unknown) => {
+              console.error(`[MQTT] User ${userId}: Cook state persist error:`, e);
+            });
+          }
+        }
+
+        // P3: Push real-time update to SSE clients
+        pushTelemetryUpdate(userId);
+
+        // P3: Push individual alert events
+        for (const alert of newlyFired) {
+          pushAlertEvent(userId, {
+            id: alert.id,
+            label: alert.label,
+            message: alert.message || `${alert.label} reached!`,
+            alertType: alert.alertType,
+          });
+        }
 
       } catch (err) {
         console.error(`[MQTT] User ${userId}: Parse error:`, err);
@@ -281,6 +309,8 @@ export function connectMqtt(
     client.on("close", () => {
       if (session.telemetry.connected) {
         session.telemetry = { ...session.telemetry, connected: false };
+        // P3: Notify SSE clients of disconnect
+        pushDisconnectEvent(userId, "MQTT connection closed");
       }
     });
 
@@ -535,6 +565,64 @@ export function setDbPersistCallback(
   if (session) {
     session.dbPersistCallback = callback;
   }
+}
+
+export function setCookStatePersistCallback(
+  userId: number,
+  callback: (userId: number, cook: ActiveCookSession) => Promise<void>
+): void {
+  const session = sessions.get(userId);
+  if (session) {
+    session.cookStatePersistCallback = callback;
+  }
+}
+
+/**
+ * Hydrate active cook state from DB after server restart.
+ * Restores the in-memory cook session so monitoring continues.
+ */
+export function hydrateCookState(
+  userId: number,
+  cookState: {
+    cookSessionId: number;
+    templateId?: string | null;
+    meatProfileId?: string | null;
+    startedAt: number;
+    currentStage: number;
+    peakGrillTemp: number;
+    peakProbeTemp: number;
+    alerts: CookAlert[];
+    stagesJson?: string | null;
+  }
+): boolean {
+  const session = sessions.get(userId);
+  if (!session) return false;
+  if (session.activeCook) return false; // already has an active cook
+
+  let stages: Array<{ name: string; temp: number; duration?: number }> | undefined;
+  if (cookState.stagesJson) {
+    try {
+      stages = JSON.parse(cookState.stagesJson);
+    } catch { /* ignore */ }
+  }
+
+  session.activeCook = {
+    cookSessionId: cookState.cookSessionId,
+    templateId: cookState.templateId ?? undefined,
+    meatProfileId: cookState.meatProfileId ?? undefined,
+    startedAt: cookState.startedAt,
+    alerts: cookState.alerts,
+    stages,
+    currentStage: cookState.currentStage,
+    peakGrillTemp: cookState.peakGrillTemp,
+    peakProbeTemp: cookState.peakProbeTemp,
+    stallDetected: false,
+    lastProbeTemps: [],
+  };
+  session.firedAlerts = cookState.alerts.filter(a => a.status === "fired");
+
+  console.log(`[COOK] User ${userId}: Hydrated cook session ${cookState.cookSessionId} from DB`);
+  return true;
 }
 
 // ─── Cook Stage Management ──────────────────────────────

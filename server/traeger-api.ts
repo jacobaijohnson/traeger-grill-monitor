@@ -15,6 +15,68 @@ const traegerClient = axios.create({
   timeout: 15000,
 });
 
+// ─── P1: Retry with exponential backoff ─────────────────
+
+interface RetryOptions {
+  maxRetries?: number;
+  baseDelay?: number;
+  maxDelay?: number;
+}
+
+/**
+ * Retry a function with exponential backoff.
+ * Does NOT retry on 401/403 auth errors (non-transient).
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: RetryOptions = {}
+): Promise<T> {
+  const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000 } = opts;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      // Don't retry auth errors
+      const errAny = err as Record<string, any>;
+      const status = errAny?.response?.status ?? (err instanceof AxiosError ? err.response?.status : undefined);
+      if (status === 401 || status === 403) throw err;
+      if (attempt < maxRetries) {
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        const jitter = delay * (0.5 + Math.random() * 0.5);
+        await new Promise(resolve => setTimeout(resolve, jitter));
+      }
+    }
+  }
+  throw lastError;
+}
+
+// ─── P1: Response validation ────────────────────────────
+
+/**
+ * Validate a token response has all required fields.
+ */
+export function validateTokenResponse(tokens: Record<string, unknown>): boolean {
+  return (
+    typeof tokens.accessToken === "string" && tokens.accessToken.length > 0 &&
+    typeof tokens.idToken === "string" && tokens.idToken.length > 0 &&
+    typeof tokens.refreshToken === "string" && tokens.refreshToken.length > 0 &&
+    typeof tokens.expiresIn === "number" && tokens.expiresIn > 0
+  );
+}
+
+/**
+ * Validate MQTT credentials response.
+ */
+export function validateMqttCredentials(creds: Record<string, unknown>): boolean {
+  return (
+    typeof creds.signedUrl === "string" && creds.signedUrl.length > 0 &&
+    typeof creds.expirationSeconds === "number" && creds.expirationSeconds > 0
+  );
+}
+
 /**
  * Extract a useful error message from an Axios error
  */
@@ -120,10 +182,13 @@ async function cognitoDirectLogin(email: string, password: string): Promise<Trae
  * falls back to direct Cognito if that fails.
  */
 export async function traegerLogin(email: string, password: string): Promise<TraegerTokens> {
-  // Attempt 1: Traeger auth proxy
+  // Attempt 1: Traeger auth proxy (with retry for transient failures)
   try {
     console.log("[Traeger Auth] Attempting auth via Traeger proxy...");
-    const tokens = await traegerProxyLogin(email, password);
+    const tokens = await withRetry(() => traegerProxyLogin(email, password), { maxRetries: 2, baseDelay: 500 });
+    if (!validateTokenResponse(tokens as unknown as Record<string, unknown>)) {
+      throw new Error("Invalid token response from Traeger proxy");
+    }
     console.log("[Traeger Auth] Success via Traeger proxy");
     return tokens;
   } catch (proxyErr) {
@@ -133,7 +198,10 @@ export async function traegerLogin(email: string, password: string): Promise<Tra
     // Attempt 2: Direct Cognito
     try {
       console.log("[Traeger Auth] Attempting auth via direct Cognito...");
-      const tokens = await cognitoDirectLogin(email, password);
+      const tokens = await withRetry(() => cognitoDirectLogin(email, password), { maxRetries: 2, baseDelay: 500 });
+      if (!validateTokenResponse(tokens as unknown as Record<string, unknown>)) {
+        throw new Error("Invalid token response from Cognito");
+      }
       console.log("[Traeger Auth] Success via direct Cognito");
       return tokens;
     } catch (cognitoErr) {
@@ -254,7 +322,7 @@ export async function traegerGetMqttCredentials(
   idToken: string,
   _thingName: string
 ): Promise<TraegerMqttCredentials> {
-  const response = await traegerClient.post(
+  const response = await withRetry(() => traegerClient.post(
     `${TRAEGER_API_URL}/mqtt-connections`,
     {},
     {
@@ -265,14 +333,18 @@ export async function traegerGetMqttCredentials(
         "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
-  );
+  ));
 
   const data = response.data;
-  return {
+  const creds = {
     signedUrl: data.signedUrl || data.signed_url,
     expirationSeconds: data.expirationSeconds || data.expiration_seconds || 3600,
     expiresAt: data.expiresAt || data.expires_at || new Date(Date.now() + 3600000).toISOString(),
   };
+  if (!validateMqttCredentials(creds as unknown as Record<string, unknown>)) {
+    throw new Error("Invalid MQTT credentials response");
+  }
+  return creds;
 }
 
 /**
@@ -284,7 +356,7 @@ export async function traegerSendCommand(
   thingName: string,
   command: string
 ): Promise<{ success: boolean }> {
-  const response = await traegerClient.post(
+  const response = await withRetry(() => traegerClient.post(
     `${TRAEGER_API_URL}/things/${thingName}/commands`,
     { command },
     {
@@ -295,7 +367,7 @@ export async function traegerSendCommand(
         "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
-  );
+  ));
 
   return { success: response.status === 200 || response.status === 201 };
 }
@@ -308,7 +380,7 @@ export async function traegerGetGrillDetails(
   idToken: string,
   thingName: string
 ): Promise<Record<string, unknown>> {
-  const response = await traegerClient.get(
+  const response = await withRetry(() => traegerClient.get(
     `${TRAEGER_API_URL}/things/${thingName}`,
     {
       headers: {
@@ -318,7 +390,7 @@ export async function traegerGetGrillDetails(
         "User-Agent": "Traeger/11 CFNetwork/1209 Darwin/20.2.0",
       },
     }
-  );
+  ));
 
   return response.data;
 }

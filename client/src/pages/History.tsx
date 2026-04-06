@@ -17,6 +17,7 @@ import {
   Star,
   WifiOff,
   ChevronRight,
+  Download,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -61,6 +62,50 @@ function formatDuration(start: Date | string, end: Date | string | null): string
   const minutes = Math.floor((ms % 3600000) / 60000);
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+function ExportCsvButton({ sessionId }: { sessionId: number }) {
+  const { data, isLoading, refetch } = trpc.cookSession.exportCsv.useQuery(
+    { id: sessionId },
+    { enabled: false } // Only fetch on demand
+  );
+  const [downloading, setDownloading] = useState(false);
+
+  const handleExport = async () => {
+    setDownloading(true);
+    try {
+      const result = await refetch();
+      if (result.data) {
+        const blob = new Blob([result.data.csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.data.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success("CSV exported");
+      }
+    } catch {
+      toast.error("Failed to export CSV");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleExport}
+      disabled={downloading}
+      className="font-mono text-xs"
+    >
+      <Download className="h-3 w-3 mr-1" />
+      {downloading ? "exporting..." : "export csv"}
+    </Button>
+  );
 }
 
 export default function History() {
@@ -271,21 +316,24 @@ export default function History() {
                     placeholder="How did this cook turn out? Any adjustments for next time?"
                     className="bg-secondary text-foreground min-h-[80px]"
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      updateNotes.mutate({
-                        id: selectedSession!,
-                        notes,
-                        rating: rating > 0 ? rating : undefined,
-                      });
-                    }}
-                    disabled={updateNotes.isPending}
-                    className="font-mono text-xs"
-                  >
-                    save notes
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        updateNotes.mutate({
+                          id: selectedSession!,
+                          notes,
+                          rating: rating > 0 ? rating : undefined,
+                        });
+                      }}
+                      disabled={updateNotes.isPending}
+                      className="font-mono text-xs"
+                    >
+                      save notes
+                    </Button>
+                    <ExportCsvButton sessionId={selectedSession!} />
+                  </div>
                 </div>
               </div>
             </>

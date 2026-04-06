@@ -213,6 +213,36 @@ export default function TemperatureGraph({
   const canStepForward = offset > 0;
   const isAtLatest = offset === 0;
 
+  // P3: Touch/swipe support for mobile timeline navigation
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (timeWindow === 0) return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+  }, [timeWindow]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current || timeWindow === 0) return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    // Only trigger if horizontal swipe is dominant and fast enough
+    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
+
+    if (dx > 0) {
+      // Swipe right = go back in time
+      handleStepBack();
+    } else {
+      // Swipe left = go forward in time
+      handleStepForward();
+    }
+  }, [timeWindow, handleStepBack, handleStepForward]);
+
   // Gap threshold: if two consecutive points are >5 minutes apart, it's a session gap
   const GAP_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -441,7 +471,13 @@ export default function TemperatureGraph({
         </div>
       )}
 
-      {/* Chart */}
+      {/* Chart — with touch swipe for mobile timeline navigation */}
+      <div
+        ref={chartContainerRef}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="touch-pan-y"
+      >
       <ResponsiveContainer width="100%" height={height}>
         <LineChart
           data={chartData}
@@ -597,6 +633,7 @@ export default function TemperatureGraph({
           )}
         </LineChart>
       </ResponsiveContainer>
+      </div>
 
       {/* Meat science marker legend */}
       {meatProfile && <MarkerLegend markers={meatProfile.markers} />}

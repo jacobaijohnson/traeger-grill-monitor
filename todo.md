@@ -11,14 +11,14 @@
 - [x] Grill discovery endpoint (GET /users/self proxy)
 - [x] Command relay endpoint (POST /things/{thingName}/commands proxy)
 - [x] MQTT credential proxy (POST /mqtt-connections)
-- [ ] Server-Sent Events for real-time telemetry to browser
+- [x] Server-Sent Events for real-time telemetry to browser
 - [x] Telemetry recording to database
 
 ## Backend - Cook Intelligence
 - [x] Cook templates data (all meat/cut/method combinations)
 - [x] Multi-stage automation engine (state machine)
 - [x] Pellet consumption estimator
-- [ ] Smart alerts (temp deviation, probe fell out, stall prediction)
+- [x] Smart alerts (temp deviation, probe fell out, stall prediction)
 
 ## Frontend - Authentication
 - [x] Traeger login page (email/password)
@@ -105,11 +105,11 @@
 - [x] Security isolation: all data scoped by userId
 
 ## Future Enhancements
-- [ ] Server-Sent Events for real-time telemetry push
-- [ ] Smart alerts (temp deviation, probe fell out, stall prediction)
+- [x] Server-Sent Events for real-time telemetry push
+- [x] Smart alerts (temp deviation, probe fell out, stall prediction)
 - [ ] Pellet consumption tracking over time
-- [ ] Export cook session data as CSV
-- [ ] Mobile-responsive optimizations
+- [x] Export cook session data as CSV
+- [x] Mobile-responsive optimizations (touch swipe for timeline navigation)
 
 ## Bug Fixes (Active)
 - [x] Fix dashboard showing "Offline waiting..." — added server-side MQTT manager with live telemetry cache
@@ -198,3 +198,34 @@
 - [x] Add visual breaks/gaps in TemperatureGraph when sessions are non-contiguous
 - [x] Add real time axis to graph showing actual clock time alongside elapsed
 - [x] Fix Dashboard markers dropdown: selecting a meat profile should immediately overlay reference lines on existing data, not wait for new data
+
+## Spec Forge P0 — Security & Data Integrity
+- [x] Add userId ownership check to cookSession.get, cookSession.end, cookSession.updateNotes
+- [x] Persist active cook session state to DB on every state change (not just telemetry)
+- [x] Add server-side grill state validation before high-temp commands
+- [x] Write tests: userId ownership enforcement (cross-user blocked)
+- [x] Write tests: cook state persistence and recovery after restart
+- [x] Write tests: grill state validation rejects unsafe commands
+
+## Spec Forge P1 — Reliability & Resilience
+- [x] Add retry with exponential backoff to Traeger API calls
+- [x] Add Traeger API response validation (schema check on auth, user, MQTT responses)
+- [x] Add user-facing error notification for MQTT disconnect during active cook
+- [x] Write integration tests: MQTT lifecycle (connect, disconnect, reconnect)
+- [x] Write integration tests: cook session state machine transitions
+- [x] Write integration tests: alert firing and dismissal
+- [x] Write integration tests: Traeger API retry and validation
+
+## Spec Forge P2 — Code Quality & Maintainability
+- [x] Split routers.ts into domain-specific files (traeger, cook, templates, analytics)
+- [x] Split db.ts into domain-specific query files
+- [ ] Extract CookGuide sub-components (template card, filter bar, detail dialog) — deferred
+- [x] Standardize terminology: "cook session" everywhere
+- [x] Add telemetry data retention policy (90-day raw, aggregate older)
+- [x] Document JSON column schemas (stagesJson, alertsJson, grillsJson)
+
+## Spec Forge P3 — Feature Enhancements
+- [x] Server-Sent Events for real-time telemetry push (replace polling)
+- [x] Smart alerts: temp deviation, probe fell out, predictive stall (via SSE push + MQTT disconnect notification)
+- [x] Export cook session data as CSV
+- [x] Mobile-responsive optimizations (touch swipe for timeline navigation)

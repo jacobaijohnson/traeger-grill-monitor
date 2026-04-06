@@ -21,6 +21,7 @@ import {
   setDbPersistCallback,
   setPelletPersistCallback,
   setCookStatePersistCallback,
+  setSendCommandCallback,
   hydrateCookState,
   hydrateHistory,
   type CookAlert as MqttCookAlert,
@@ -105,6 +106,18 @@ export async function ensureMqttConnected(userId: number) {
         if (!sess?.selectedGrillId) return;
         const { persistPelletFromMqtt } = await import("../db/pellet");
         await persistPelletFromMqtt(uid, sess.selectedGrillId, pelletLevel, grillTemp, cookSessionId);
+      });
+      // Wire send command callback for automation engine
+      setSendCommandCallback(userId, async (uid: number, command: string) => {
+        try {
+          const { idToken: freshToken } = await getValidIdToken(uid);
+          const sess = await getTraegerSession(uid);
+          if (!sess?.selectedGrillId) return;
+          await traegerSendCommand(freshToken, sess.selectedGrillId, command);
+          console.log(`[Automation] Sent command ${command} for user ${uid}`);
+        } catch (err) {
+          console.error(`[Automation] Failed to send command ${command} for user ${uid}:`, err);
+        }
       });
       // Wire cook state persistence callback
       setCookStatePersistCallback(userId, async (uid, cook) => {

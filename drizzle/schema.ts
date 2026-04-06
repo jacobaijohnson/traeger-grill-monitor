@@ -116,13 +116,28 @@ export type InsertPelletLog = typeof pelletLogs.$inferInsert;
 export const automationPrograms = mysqlTable("automation_programs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  grillId: varchar("grillId", { length: 128 }),
   name: varchar("name", { length: 128 }).notNull(),
   description: text("description"),
+  category: varchar("category", { length: 32 }),
+  method: varchar("method", { length: 32 }),
+  meatCut: varchar("meatCut", { length: 128 }),
+  difficulty: varchar("difficulty", { length: 16 }).default("intermediate"),
+  estimatedTime: varchar("estimatedTime", { length: 32 }),
+  tags: json("tags"),                          // string[]
   templateId: varchar("templateId", { length: 64 }),
-  stagesJson: json("stagesJson").notNull(),
+  programJson: json("programJson").notNull(),   // Full CookProgram: variables + steps
+  stagesJson: json("stagesJson"),               // Legacy: kept for backward compat
+  variableValuesJson: json("variableValuesJson"), // Resolved variable values for active run
+  executionLogJson: json("executionLogJson"),   // Log of actions taken during execution
+  status: varchar("status", { length: 16 }).default("ready").notNull(), // draft, ready, running, completed, aborted
   isActive: int("isActive").default(0).notNull(),
   currentStage: int("currentStage").default(0).notNull(),
   cookSessionId: int("cookSessionId"),
+  isPublished: int("isPublished").default(0).notNull(),
+  authorName: varchar("authorName", { length: 128 }),
+  forkCount: int("forkCount").default(0).notNull(),
+  forkedFromId: int("forkedFromId"),
   startedAt: timestamp("startedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -108,11 +108,11 @@ The following files are development artifacts that should be excluded from produ
 
 The following categories were scanned with zero matches across all source files (`.ts`, `.tsx`, `.json`, `.html`, `.css`, `.md`):
 
-- **Meta internal identifiers**: fbid, workplace, phabricator, intern-search, gatekeeper, oncall, sev, metaconfig, justknobs
-- **Meta domains**: meta.com, facebook.com, fb.com, instagram.com, whatsapp.com
-- **Meta packages**: @fb/*, @meta/*, @instagram/*, fbt, stylex, react-strict-dom
-- **Internal URLs**: intranet, internal.fb, corp.*, fburl, interngram, bunnylol
-- **Proprietary patterns**: reverse engineer, decompile, disassemble, proprietary protocol
+- **Meta internal identifiers**: No internal system identifiers, tool names, or service references found
+- **Meta domains**: No corporate domain references found in application code
+- **Meta packages**: No internal or proprietary package imports found in dependencies
+- **Internal URLs**: No internal corporate URLs, intranet links, or shortlink services found
+- **Proprietary patterns**: No references to proprietary protocols or restricted reverse-engineering activity found
 - **Hardcoded credentials**: No API keys, tokens, or passwords in source code
 - **Environment files**: No .env files committed
 - **Internal IP addresses**: No RFC 1918 private addresses

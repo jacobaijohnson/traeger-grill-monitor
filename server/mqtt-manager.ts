@@ -1,7 +1,7 @@
 import mqtt from "mqtt";
-import type { TraegerTelemetry } from "@shared/traeger-types";
+import type { TraegerTelemetry, AutomationStage } from "@shared/traeger-types";
 import type { TempMarker } from "@shared/meat-science";
-import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent } from "./sse";
+import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent, pushAutomationEvent } from "./sse";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -30,6 +30,14 @@ interface ActiveCookSession {
   stallStartedAt?: number;
   stallStartTemp?: number;
   lastProbeTemps: number[]; // last 10 readings for stall detection
+  // --- Automation program state ---
+  automationId?: number;                // DB id of the active automation program
+  automationStages?: AutomationStage[]; // The full automation stage definitions
+  automationPhase: number;              // Current automation phase index
+  phaseStartedAt?: number;              // When the current phase started
+  lastAlarmTemp?: number;               // Last temp at which an escalating alarm fired
+  phaseAcknowledged?: boolean;          // Whether user acknowledged the current phase alarm
+  autoCommandsSent: string[];           // Track which auto-commands have been sent (prevent duplicates)
 }
 
 interface MqttSession {
@@ -47,6 +55,8 @@ interface MqttSession {
   dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
   pelletPersistCallback: ((userId: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>) | null;
   cookStatePersistCallback: ((userId: number, cook: ActiveCookSession) => Promise<void>) | null;
+  // Automation: callback to send grill commands from the automation engine
+  sendCommandCallback: ((userId: number, command: string) => Promise<void>) | null;
   // RC-4: Backpressure flag — skip persist if previous one is still in flight
   persistInFlight: boolean;
   pelletPersistInFlight: boolean;
@@ -180,6 +190,204 @@ function trackPeaks(session: MqttSession): void {
   }
 }
 
+// ─── Automation Engine ─────────────────────────────────
+
+/**
+ * Evaluate automation program phases on every telemetry update.
+ * Handles:
+ * - Phase trigger detection (probe temp, time)
+ * - Escalating alarms (re-alarm every N°F)
+ * - Auto-commands (set grill temp, super smoke, keep warm)
+ * - Phase advancement
+ */
+function evaluateAutomation(userId: number, session: MqttSession): void {
+  const cook = session.activeCook;
+  if (!cook?.automationStages || cook.automationStages.length === 0) return;
+
+  const phase = cook.automationPhase;
+  if (phase >= cook.automationStages.length) return; // All phases complete
+
+  const stage = cook.automationStages[phase];
+  const telemetry = session.telemetry;
+  const probeTemp = telemetry.probe;
+  const grillTemp = telemetry.grill;
+
+  // --- Check if phase trigger has been met ---
+  let triggerMet = false;
+
+  if (stage.triggerType === "probe_temp") {
+    triggerMet = probeTemp >= stage.triggerValue;
+  } else if (stage.triggerType === "time") {
+    const elapsed = cook.phaseStartedAt ? (Date.now() - cook.phaseStartedAt) / 1000 : 0;
+    triggerMet = elapsed >= stage.triggerValue;
+  }
+  // "manual" triggers never auto-fire
+
+  // --- Escalating alarms: re-alarm every N°F above trigger ---
+  if (triggerMet && stage.alarmIntervalDegrees && stage.alarmIntervalDegrees > 0) {
+    const maxTemp = stage.alarmMaxTemp ?? Infinity;
+    const lastAlarm = cook.lastAlarmTemp ?? stage.triggerValue;
+    const nextAlarmTemp = lastAlarm + stage.alarmIntervalDegrees;
+
+    if (probeTemp >= nextAlarmTemp && probeTemp <= maxTemp) {
+      // Fire an escalating alarm
+      cook.lastAlarmTemp = Math.floor(probeTemp / stage.alarmIntervalDegrees) * stage.alarmIntervalDegrees;
+      const alarmId = `auto-escalate-${phase}-${cook.lastAlarmTemp}`;
+
+      const alarm: CookAlert = {
+        id: alarmId,
+        label: `${stage.name} — Probe at ${Math.round(probeTemp)}°F`,
+        triggerTemp: cook.lastAlarmTemp,
+        triggerType: "probe",
+        alertType: "alarm",
+        status: "fired",
+        firedAt: Date.now(),
+        message: stage.alertMessage || `Probe reached ${Math.round(probeTemp)}°F — action needed!`,
+      };
+
+      cook.alerts.push(alarm);
+      session.firedAlerts.push({ ...alarm });
+
+      pushAlertEvent(userId, {
+        id: alarm.id,
+        label: alarm.label,
+        message: alarm.message!,
+        alertType: "alarm",
+      });
+
+      pushAutomationEvent(userId, {
+        eventType: "escalating_alarm",
+        phase,
+        phaseName: stage.name,
+        message: `Escalating alarm: probe at ${Math.round(probeTemp)}°F`,
+        probeTemp: Math.round(probeTemp),
+        grillTemp: Math.round(grillTemp),
+      });
+
+      console.log(`[AUTO] User ${userId}: Escalating alarm at ${Math.round(probeTemp)}°F (phase ${phase}: ${stage.name})`);
+    }
+  }
+
+  // --- First trigger: fire the phase alert ---
+  if (triggerMet && !cook.autoCommandsSent.includes(`trigger-${phase}`)) {
+    cook.autoCommandsSent.push(`trigger-${phase}`);
+
+    // Fire the phase trigger alert
+    const alertId = `auto-phase-${phase}`;
+    const alert: CookAlert = {
+      id: alertId,
+      label: `${stage.name} — Target reached!`,
+      triggerTemp: stage.triggerValue,
+      triggerType: stage.triggerType === "probe_temp" ? "probe" : "grill",
+      alertType: stage.alertType,
+      status: "fired",
+      firedAt: Date.now(),
+      message: stage.alertMessage || `Phase "${stage.name}" trigger reached!`,
+    };
+
+    cook.alerts.push(alert);
+    session.firedAlerts.push({ ...alert });
+
+    pushAlertEvent(userId, {
+      id: alert.id,
+      label: alert.label,
+      message: alert.message!,
+      alertType: stage.alertType,
+    });
+
+    console.log(`[AUTO] User ${userId}: Phase ${phase} (${stage.name}) trigger fired at probe=${Math.round(probeTemp)}°F`);
+
+    // --- Auto-commands: send grill commands ---
+    if (stage.autoSetGrillTemp && !cook.autoCommandsSent.includes(`setTemp-${phase}`)) {
+      cook.autoCommandsSent.push(`setTemp-${phase}`);
+      const tempCommand = JSON.stringify({ set: stage.autoSetGrillTemp });
+
+      if (session.sendCommandCallback) {
+        session.sendCommandCallback(userId, tempCommand)
+          .then(() => {
+            console.log(`[AUTO] User ${userId}: Auto-set grill to ${stage.autoSetGrillTemp}°F (phase ${phase})`);
+            pushAutomationEvent(userId, {
+              eventType: "auto_command",
+              phase,
+              phaseName: stage.name,
+              message: `Auto-set grill temperature to ${stage.autoSetGrillTemp}°F`,
+              autoCommand: `setTemp:${stage.autoSetGrillTemp}`,
+              probeTemp: Math.round(probeTemp),
+              grillTemp: Math.round(grillTemp),
+            });
+          })
+          .catch((err: unknown) => {
+            console.error(`[AUTO] User ${userId}: Failed to auto-set temp:`, err);
+          });
+      }
+    }
+
+    // --- Advance to next phase (unless holdAfterTrigger or requireAcknowledge) ---
+    if (!stage.holdAfterTrigger && !stage.requireAcknowledge) {
+      advanceAutomationPhase(userId, session);
+    } else if (stage.requireAcknowledge) {
+      cook.phaseAcknowledged = false;
+      console.log(`[AUTO] User ${userId}: Phase ${phase} waiting for acknowledgment`);
+    }
+
+    pushAutomationEvent(userId, {
+      eventType: "phase_complete",
+      phase,
+      phaseName: stage.name,
+      message: `Phase "${stage.name}" completed`,
+      probeTemp: Math.round(probeTemp),
+      grillTemp: Math.round(grillTemp),
+    });
+  }
+}
+
+/**
+ * Advance to the next automation phase.
+ */
+function advanceAutomationPhase(userId: number, session: MqttSession): void {
+  const cook = session.activeCook;
+  if (!cook?.automationStages) return;
+
+  const nextPhase = cook.automationPhase + 1;
+  if (nextPhase >= cook.automationStages.length) {
+    console.log(`[AUTO] User ${userId}: All automation phases complete`);
+    return;
+  }
+
+  cook.automationPhase = nextPhase;
+  cook.currentStage = nextPhase;
+  cook.phaseStartedAt = Date.now();
+  cook.lastAlarmTemp = undefined;
+  cook.phaseAcknowledged = undefined;
+
+  const nextStage = cook.automationStages[nextPhase];
+
+  // Auto-set grill temp for the new phase (if different from current)
+  if (nextStage.grillTemp && session.sendCommandCallback) {
+    const commandKey = `phaseTemp-${nextPhase}`;
+    if (!cook.autoCommandsSent.includes(commandKey)) {
+      cook.autoCommandsSent.push(commandKey);
+      const tempCommand = JSON.stringify({ set: nextStage.grillTemp });
+      session.sendCommandCallback(userId, tempCommand)
+        .then(() => {
+          console.log(`[AUTO] User ${userId}: Set grill to ${nextStage.grillTemp}°F for phase ${nextPhase} (${nextStage.name})`);
+        })
+        .catch((err: unknown) => {
+          console.error(`[AUTO] User ${userId}: Failed to set phase temp:`, err);
+        });
+    }
+  }
+
+  pushAutomationEvent(userId, {
+    eventType: "phase_change",
+    phase: nextPhase,
+    phaseName: nextStage.name,
+    message: `Entering phase: ${nextStage.name} (grill at ${nextStage.grillTemp}°F)`,
+  });
+
+  console.log(`[AUTO] User ${userId}: Advanced to phase ${nextPhase}: ${nextStage.name}`);
+}
+
 // ─── MQTT Connection ────────────────────────────────────
 
 export function connectMqtt(
@@ -215,6 +423,7 @@ export function connectMqtt(
     dbPersistCallback: existing?.dbPersistCallback || null,
     pelletPersistCallback: existing?.pelletPersistCallback || null,
     cookStatePersistCallback: existing?.cookStatePersistCallback || null,
+    sendCommandCallback: existing?.sendCommandCallback || null,
     persistInFlight: false,
     pelletPersistInFlight: false,
     cookStatePersistInFlight: false,
@@ -282,6 +491,9 @@ export function connectMqtt(
 
         // Stall detection
         detectStall(session);
+
+        // Automation engine: evaluate phase transitions, escalating alarms, auto-commands
+        evaluateAutomation(userId, session);
 
         // P0-INT: Persist cook state to DB on every update so it survives restarts
         if (session.activeCook && session.dbPersistCallback) {
@@ -531,6 +743,8 @@ export function startCookSession(
     peakProbeTemp: 0,
     stallDetected: false,
     lastProbeTemps: [],
+    automationPhase: 0,
+    autoCommandsSent: [],
   };
   session.firedAlerts = [];
 
@@ -683,6 +897,8 @@ export function hydrateCookState(
     peakProbeTemp: cookState.peakProbeTemp,
     stallDetected: false,
     lastProbeTemps: [],
+    automationPhase: cookState.currentStage,
+    autoCommandsSent: [],
   };
   session.firedAlerts = cookState.alerts.filter(a => a.status === "fired");
 
@@ -699,4 +915,152 @@ export function advanceCookStage(userId: number): number {
     session.activeCook.currentStage++;
   }
   return session.activeCook.currentStage;
+}
+
+// ─── Automation Program Management ─────────────────────
+
+/**
+ * Set the send-command callback so the automation engine can
+ * dispatch grill commands (setTemp, superSmoke, etc.) without
+ * importing the Traeger API directly.
+ */
+export function setSendCommandCallback(
+  userId: number,
+  callback: (userId: number, command: string) => Promise<void>
+): void {
+  const session = sessions.get(userId);
+  if (session) {
+    session.sendCommandCallback = callback;
+  }
+}
+
+/**
+ * Load an automation program into the active cook session.
+ * Called when the user starts a cook with an automation program attached.
+ * The program's stages are stored in the cook session's automationStages.
+ */
+export function loadAutomationProgram(
+  userId: number,
+  automationId: number,
+  stages: AutomationStage[],
+  variableValues?: Record<string, string | number>
+): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook) return false;
+
+  session.activeCook.automationId = automationId;
+  session.activeCook.automationStages = stages;
+  session.activeCook.automationPhase = 0;
+  session.activeCook.phaseStartedAt = Date.now();
+  session.activeCook.lastAlarmTemp = undefined;
+  session.activeCook.phaseAcknowledged = undefined;
+  session.activeCook.autoCommandsSent = [];
+
+  // Execute entry actions for the first phase
+  const firstStage = stages[0];
+  if (firstStage) {
+    // Auto-set grill temp for first phase
+    if (firstStage.grillTemp && session.sendCommandCallback) {
+      const commandKey = `phaseTemp-0`;
+      session.activeCook.autoCommandsSent.push(commandKey);
+      const tempCommand = JSON.stringify({ set: firstStage.grillTemp });
+      session.sendCommandCallback(userId, tempCommand)
+        .then(() => {
+          console.log(`[AUTO] User ${userId}: Set grill to ${firstStage.grillTemp}°F for phase 0 (${firstStage.name})`);
+          pushAutomationEvent(userId, {
+            eventType: "phase_change",
+            phase: 0,
+            phaseName: firstStage.name,
+            message: `Starting automation: ${firstStage.name} at ${firstStage.grillTemp}°F`,
+            autoCommand: `setTemp:${firstStage.grillTemp}`,
+          });
+        })
+        .catch((err: unknown) => {
+          console.error(`[AUTO] User ${userId}: Failed to set initial phase temp:`, err);
+        });
+    }
+
+    // Auto-toggle super smoke for first phase
+    if (firstStage.autoSetSuperSmoke !== undefined && session.sendCommandCallback) {
+      const smokeCommand = firstStage.autoSetSuperSmoke ? "20" : "21"; // SUPER_SMOKE_ON/OFF
+      session.sendCommandCallback(userId, smokeCommand).catch(() => {});
+    }
+  }
+
+  console.log(`[AUTO] User ${userId}: Loaded automation program ${automationId} with ${stages.length} phases`);
+  return true;
+}
+
+/**
+ * Acknowledge the current automation phase alarm.
+ * This allows the automation to advance to the next phase
+ * (if the current phase has requireAcknowledge=true).
+ */
+export function acknowledgeAutomationPhase(userId: number): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook?.automationStages) return false;
+
+  const cook = session.activeCook;
+  const stages = cook.automationStages!;
+  const phase = cook.automationPhase;
+  const stage = stages[phase];
+
+  if (!stage) return false;
+
+  cook.phaseAcknowledged = true;
+
+  // If this phase was waiting for acknowledgment, advance now
+  if (stage.requireAcknowledge) {
+    advanceAutomationPhase(userId, session);
+    console.log(`[AUTO] User ${userId}: Acknowledged phase ${phase} (${stage.name}), advancing`);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Manually advance the automation to the next phase (user override).
+ */
+export function skipAutomationPhase(userId: number): boolean {
+  const session = sessions.get(userId);
+  if (!session?.activeCook?.automationStages) return false;
+
+  const cook = session.activeCook;
+  const stages = cook.automationStages!;
+  if (cook.automationPhase >= stages.length - 1) return false;
+
+  console.log(`[AUTO] User ${userId}: Manual skip from phase ${cook.automationPhase}`);
+  advanceAutomationPhase(userId, session);
+  return true;
+}
+
+/**
+ * Get the current automation state for a user (for API responses).
+ */
+export function getAutomationState(userId: number): {
+  active: boolean;
+  automationId?: number;
+  phase: number;
+  totalPhases: number;
+  currentPhaseName?: string;
+  phaseAcknowledged?: boolean;
+  autoCommandsSent: string[];
+} | null {
+  const session = sessions.get(userId);
+  if (!session?.activeCook?.automationStages) return null;
+
+  const cook = session.activeCook;
+  const stages = cook.automationStages!;
+  const currentStage = stages[cook.automationPhase];
+
+  return {
+    active: true,
+    automationId: cook.automationId,
+    phase: cook.automationPhase,
+    totalPhases: stages.length,
+    currentPhaseName: currentStage?.name,
+    phaseAcknowledged: cook.phaseAcknowledged,
+    autoCommandsSent: cook.autoCommandsSent,
+  };
 }

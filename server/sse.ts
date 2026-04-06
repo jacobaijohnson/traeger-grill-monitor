@@ -66,6 +66,19 @@ export function pushTelemetryUpdate(userId: number) {
         peakGrillTemp: activeCook.peakGrillTemp,
         peakProbeTemp: activeCook.peakProbeTemp,
         alertCount: activeCook.alerts.length,
+        // Automation state
+        automationId: activeCook.automationId,
+        automationPhase: activeCook.automationPhase,
+        automationStages: activeCook.automationStages?.map(s => ({
+          name: s.name,
+          grillTemp: s.grillTemp,
+          triggerType: s.triggerType,
+          triggerValue: s.triggerValue,
+          alertType: s.alertType,
+        })),
+        phaseAcknowledged: activeCook.phaseAcknowledged,
+        lastAlarmTemp: activeCook.lastAlarmTemp,
+        autoCommandsSent: activeCook.autoCommandsSent,
       } : null,
       firedAlerts,
       missedAlerts,
@@ -94,6 +107,40 @@ export function pushAlertEvent(userId: number, alert: { id: string; label: strin
   const payload = JSON.stringify({
     type: "alert",
     data: alert,
+    timestamp: Date.now(),
+  });
+
+  const clientArray = Array.from(clients);
+  for (const client of clientArray) {
+    try {
+      client.write(`data: ${payload}\n\n`);
+    } catch {
+      removeClient(userId, client);
+    }
+  }
+}
+
+/**
+ * Push an automation event (phase change, auto-command, escalating alarm) to SSE clients.
+ */
+export function pushAutomationEvent(
+  userId: number,
+  event: {
+    eventType: "phase_change" | "auto_command" | "escalating_alarm" | "phase_complete";
+    phase: number;
+    phaseName: string;
+    message: string;
+    autoCommand?: string;
+    probeTemp?: number;
+    grillTemp?: number;
+  }
+) {
+  const clients = sseClients.get(userId);
+  if (!clients || clients.size === 0) return;
+
+  const payload = JSON.stringify({
+    type: "automation",
+    data: event,
     timestamp: Date.now(),
   });
 

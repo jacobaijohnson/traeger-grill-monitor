@@ -107,7 +107,7 @@
 ## Future Enhancements
 - [x] Server-Sent Events for real-time telemetry push
 - [x] Smart alerts (temp deviation, probe fell out, stall prediction)
-- [ ] Pellet consumption tracking over time
+- [x] Pellet consumption tracking over time (pellet_logs + analytics)
 - [x] Export cook session data as CSV
 - [x] Mobile-responsive optimizations (touch swipe for timeline navigation)
 
@@ -239,8 +239,8 @@
 - [x] Create pellet_logs table (grillId, userId, timestamp, pelletLevel, estimatedLbs, sessionId)
 - [x] Track pellet level changes from MQTT telemetry and log consumption per cook
 - [x] Calculate burn rate (lbs/hr) per cook session
-- [ ] Add pellet consumption panel to Dashboard
-- [ ] Add pellet trends chart to Analytics page
+- [x] Add pellet consumption panel to Dashboard (pellet level card)
+- [x] Add pellet trends chart to Analytics page
 
 ## Multi-Grill Support
 - [x] Add grillId column to telemetry_readings table (already existed)
@@ -248,8 +248,8 @@
 - [x] Update MQTT manager — added pellet persist callback with grill-aware wiring
 - [x] Update all DB queries to filter by grillId
 - [x] Update all router endpoints to accept/filter by grillId
-- [ ] Build grill switcher UI component in sidebar/header
-- [ ] Ensure all data (telemetry, sessions, analytics, pellets) is isolated by grillId
+- [x] Build grill switcher UI component in sidebar (GrillSwitcher.tsx)
+- [x] Ensure all data (telemetry, sessions, analytics, pellets) is isolated by grillId
 
 ## DSS Audit — Confirm DSS-1 Classification
 - [x] Scan all source code for Meta internal references (fbid, workplace, intern, phabricator, etc.)
@@ -282,3 +282,19 @@
 - [x] Update docker-compose.yml for LSIO conventions (/config volume, PUID/PGID)
 - [x] Update ENV_TEMPLATE.md with LSIO-specific variables
 - [x] Create .dockerignore for clean builds
+
+## Multi-Phase Cook Programs (Automated Brisket etc.)
+- [x] Audit existing Cook Guide, controls, and Traeger API for temp limits
+- [x] Determine lowest grill temperature supported by API (165°F)
+- [x] Design cook program data model (phases, triggers, alarms, auto-commands) — AUTOMATION_DESIGN.md
+- [x] Create cook_programs and cook_program_phases DB schema (extended automation_programs table)
+- [x] Build cook program DB module
+- [x] Build cook program router (CRUD + activate/deactivate + presets + fork)
+- [x] Integrate cook program phase monitoring into MQTT telemetry loop (evaluateAutomation)
+- [x] Build persistent alarm component (audio + visual, requires manual dismissal)
+- [x] Build cook program UI (preset library, variable config, live execution display)
+- [x] Build brisket preset as default cook program template (Competition Brisket)
+- [x] Auto-step grill temperature when phase triggers fire (via sendCommandCallback)
+- [x] Alert escalation: alarm every 5°F until user acknowledges (escalating_alarm action)
+- [x] Auto-reduce to lowest temp (165°F) when final target reached (prevent overcook)
+- [x] Write tests for phase transitions, alarm logic, and auto-commands (27 tests)

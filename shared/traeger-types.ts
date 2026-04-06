@@ -91,6 +91,35 @@ export interface CookStage {
   alertMessage: string;
 }
 
+/**
+ * Extended stage for automation programs.
+ * Adds alarm behavior, auto-commands, and escalation rules.
+ */
+export interface AutomationStage {
+  name: string;
+  grillTemp: number;                          // Target grill temp for this phase
+  triggerType: "probe_temp" | "time" | "manual";
+  triggerValue: number;                       // Probe °F or seconds
+  superSmoke: boolean;
+  alertMessage: string;
+  // --- Automation extensions ---
+  alertType: "notification" | "alarm";        // alarm = persistent, requires dismiss
+  alarmIntervalDegrees?: number;              // Re-alarm every N°F (e.g., 5 = alarm at 160, 165, 170...)
+  alarmMaxTemp?: number;                      // Stop re-alarming above this temp
+  autoSetGrillTemp?: number;                  // Auto-send setTemp command when trigger fires
+  autoSetSuperSmoke?: boolean;                // Auto-toggle super smoke when entering this phase
+  autoSetKeepWarm?: boolean;                  // Auto-toggle keep warm when entering this phase
+  holdAfterTrigger?: boolean;                 // Stay in this phase after trigger (for rest/hold)
+  requireAcknowledge?: boolean;               // Block phase advance until user acknowledges
+}
+
+/**
+ * Minimum grill temperature supported by Traeger API.
+ * Most models support 165°F as the lowest (Smoke setting).
+ */
+export const MIN_GRILL_TEMP = 165;
+export const MAX_GRILL_TEMP = 500;
+
 export interface CookTemplate {
   id: string;
   name: string;

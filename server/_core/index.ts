@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerSSERoutes } from "../sse";
 import { seedAdmin } from "./seed-admin";
+import { initVapidKeys } from "../web-push";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -107,6 +108,11 @@ async function startServer() {
 
   // Seed admin user from env vars on first boot
   await seedAdmin();
+
+  // Initialize VAPID keys for Web Push notifications
+  await initVapidKeys().catch(err => {
+    console.warn("[WebPush] VAPID init failed (push notifications unavailable):", err.message);
+  });
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

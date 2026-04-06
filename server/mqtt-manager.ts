@@ -2,6 +2,7 @@ import mqtt from "mqtt";
 import type { TraegerTelemetry, AutomationStage } from "@shared/traeger-types";
 import type { TempMarker } from "@shared/meat-science";
 import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent, pushAutomationEvent } from "./sse";
+import { sendPushIfEnabled } from "./web-push";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ function evaluateAlerts(session: MqttSession): CookAlert[] {
 
 // ─── Stall Detection ────────────────────────────────────
 
-function detectStall(session: MqttSession): void {
+function detectStall(userId: string, session: MqttSession): void {
   if (!session.activeCook) return;
   const cook = session.activeCook;
 
@@ -168,10 +169,24 @@ function detectStall(session: MqttSession): void {
       cook.stallStartedAt = Date.now();
       cook.stallStartTemp = probeTemp;
       console.log(`[STALL] Detected at ${probeTemp}°F — temp change < 2°F over last 10 readings`);
+      // Web Push: stall detected
+      sendPushIfEnabled(userId, "stallDetected", {
+        title: "🥩 Stall Detected",
+        body: `Probe stuck at ${Math.round(probeTemp)}°F — the stall has begun. This is normal for large cuts.`,
+        tag: `stall-detected-${Date.now()}`,
+        url: "/live-cook",
+      }).catch(() => {});
     }
   } else if (cook.stallDetected && probeTemp > (cook.stallStartTemp || 0) + 5) {
     // Stall broken — temp rose more than 5°F above stall start
     console.log(`[STALL] Broken at ${probeTemp}°F (started at ${cook.stallStartTemp}°F)`);
+    // Web Push: stall broken
+    sendPushIfEnabled(userId, "stallBroken", {
+      title: "🔥 Stall Broken!",
+      body: `Probe climbing again at ${Math.round(probeTemp)}°F (stall started at ${cook.stallStartTemp}°F).`,
+      tag: `stall-broken-${Date.now()}`,
+      url: "/live-cook",
+    }).catch(() => {});
     cook.stallDetected = false;
     cook.stallStartedAt = undefined;
     cook.stallStartTemp = undefined;
@@ -330,6 +345,14 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       });
 
       console.log(`[AUTO] User ${userId}: Escalating alarm at ${Math.round(probeTemp)}°F (phase ${phase}: ${stage.name})`);
+      // Web Push: escalating alarm
+      sendPushIfEnabled(userId, "escalatingAlarm", {
+        title: `⚠️ ${stage.name} — ${Math.round(probeTemp)}°F`,
+        body: alarm.message!,
+        tag: alarm.id,
+        url: "/live-cook",
+        alarm: true,
+      }).catch(() => {});
     }
   }
 
@@ -361,6 +384,14 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
     });
 
     console.log(`[AUTO] User ${userId}: Phase ${phase} (${stage.name}) trigger fired at probe=${Math.round(probeTemp)}°F`);
+    // Web Push: phase trigger alert
+    sendPushIfEnabled(userId, "alertFired", {
+      title: `🎯 ${stage.name} — Target Reached!`,
+      body: alert.message!,
+      tag: alert.id,
+      url: "/live-cook",
+      alarm: stage.alertType === "alarm",
+    }).catch(() => {});
 
     // --- Auto-commands: send grill commands ---
     if (stage.autoSetGrillTemp && !cook.autoCommandsSent.includes(`setTemp-${phase}`)) {
@@ -457,6 +488,14 @@ function advanceAutomationPhase(userId: string, session: MqttSession): void {
     phaseName: nextStage.name,
     message: `Entering phase: ${nextStage.name} (grill at ${nextStage.grillTemp}°F)`,
   });
+
+  // Web Push: phase change
+  sendPushIfEnabled(userId, "phaseChange", {
+    title: `📋 Phase ${nextPhase + 1}: ${nextStage.name}`,
+    body: `Advancing to ${nextStage.name} — grill set to ${nextStage.grillTemp}°F`,
+    tag: `phase-change-${nextPhase}`,
+    url: "/live-cook",
+  }).catch(() => {});
 
   console.log(`[AUTO] User ${userId}: Advanced to phase ${nextPhase}: ${nextStage.name}`);
 }
@@ -563,7 +602,7 @@ export function connectMqtt(
         trackPeaks(session);
 
         // Stall detection
-        detectStall(session);
+        detectStall(userId, session);
 
         // Automation engine: evaluate phase transitions, escalating alarms, auto-commands
         evaluateAutomation(userId, session);
@@ -588,7 +627,7 @@ export function connectMqtt(
         // P3: Push real-time update to SSE clients
         pushTelemetryUpdate(userId);
 
-        // P3: Push individual alert events
+        // P3: Push individual alert events + Web Push
         for (const alert of newlyFired) {
           pushAlertEvent(userId, {
             id: alert.id,
@@ -596,6 +635,14 @@ export function connectMqtt(
             message: alert.message || `${alert.label} reached!`,
             alertType: alert.alertType,
           });
+          // Web Push: alert fired
+          sendPushIfEnabled(userId, "alertFired", {
+            title: alert.alertType === "alarm" ? `🚨 ${alert.label}` : `🔔 ${alert.label}`,
+            body: alert.message || `${alert.label} reached!`,
+            tag: alert.id,
+            url: "/live-cook",
+            alarm: alert.alertType === "alarm",
+          }).catch(() => {});
         }
 
       } catch (err) {
@@ -612,6 +659,14 @@ export function connectMqtt(
         session.telemetry = { ...session.telemetry, connected: false };
         // P3: Notify SSE clients of disconnect
         pushDisconnectEvent(userId, "MQTT connection closed");
+        // Web Push: probe/connection disconnect
+        sendPushIfEnabled(userId, "probeDisconnect", {
+          title: "⚠️ Grill Disconnected",
+          body: "MQTT connection to your grill was lost. Check your WiFi and grill power.",
+          tag: `disconnect-${Date.now()}`,
+          url: "/settings",
+          alarm: true,
+        }).catch(() => {});
       }
     });
 

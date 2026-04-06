@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Flame, ArrowLeft, Mail, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
+import { Flame, ArrowLeft, Mail, CheckCircle2, Terminal } from "lucide-react";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -19,15 +18,15 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
+      // This triggers the server-side sendResetPassword which logs the reset URL to console
       await (authClient as any).forgetPassword({
         email,
         redirectTo: "/reset-password",
       });
-      setSent(true);
-    } catch (err: any) {
+    } catch {
       // Always show success to prevent email enumeration
-      setSent(true);
     } finally {
+      setSent(true);
       setLoading(false);
     }
   };
@@ -48,12 +47,12 @@ export default function ForgotPassword() {
         <Card className="bg-card border-border">
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-xl font-bold">
-              {sent ? "Check Your Email" : "Forgot Password"}
+              {sent ? "Reset Link Generated" : "Forgot Password"}
             </CardTitle>
             <CardDescription className="text-sm">
               {sent
-                ? "If an account exists with that email, we've sent a password reset link."
-                : "Enter your email address and we'll send you a reset link."}
+                ? "A password reset link has been generated in the server logs."
+                : "Enter your email to request a password reset."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -64,10 +63,28 @@ export default function ForgotPassword() {
                     <CheckCircle2 className="h-8 w-8 text-green-400" />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  If you don't see the email, check your spam folder. If SMTP is not configured on this server,
-                  contact your admin for a manual password reset.
-                </p>
+
+                <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                    <Terminal className="h-3.5 w-3.5" />
+                    How to get your reset link
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This server does not send emails. The password reset link has been printed
+                    to the <strong className="text-foreground">server console / Docker logs</strong>.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Ask your server admin to check the logs with:
+                  </p>
+                  <code className="block text-xs font-mono bg-background p-2 rounded border border-border text-foreground">
+                    docker logs traeger-smoker-insight
+                  </code>
+                  <p className="text-xs text-muted-foreground">
+                    The admin will find a boxed reset URL they can share with you.
+                    The link expires in 1 hour.
+                  </p>
+                </div>
+
                 <Button variant="outline" className="w-full font-mono text-xs" asChild>
                   <Link to="/login">
                     <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
@@ -96,12 +113,20 @@ export default function ForgotPassword() {
                   </div>
                 </div>
 
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-300/80">
+                    <Terminal className="h-3 w-3 inline mr-1" />
+                    This server uses console-only password reset. The reset link will appear
+                    in the Docker logs for your admin to share with you.
+                  </p>
+                </div>
+
                 <Button
                   type="submit"
                   className="w-full bg-primary text-primary-foreground font-mono"
                   disabled={loading || !email}
                 >
-                  {loading ? "Sending..." : "Send Reset Link"}
+                  {loading ? "Requesting..." : "Request Reset Link"}
                 </Button>
 
                 <div className="text-center">

@@ -18,7 +18,11 @@ Built for the homelab community. Runs as a single Docker container following [Li
 
 **Multi-Grill Support** manages multiple Traeger grills from a single dashboard. Each grill maintains its own MQTT connection, telemetry stream, and cook history.
 
+**Push Notifications** delivers real-time alerts to your phone or desktop even when the browser tab is closed. Powered by the Web Push API with auto-generated VAPID keys. Get notified for temperature alerts, stall detection, stall recovery, cook phase changes, and escalating alarms. Per-user notification preferences let each user choose which alerts they want to receive.
+
 **Admin Access Control** provides flexible registration modes (closed, invite-only, email allowlist, open) so you control who can access your instance. Admin users manage invites, allowlists, and user roles from a built-in settings panel.
+
+**Console-Only Password Reset** keeps the stack simple with no SMTP dependency. When a user requests a password reset, the reset link is logged to the Docker container console. The admin copies the link and shares it directly. No email server configuration needed.
 
 ---
 
@@ -205,6 +209,7 @@ id your_user
 | Auth | Better Auth | Email/password authentication with admin plugin |
 | Real-time | MQTT.js, Server-Sent Events | Traeger broker connection and live UI updates |
 | Encryption | AES-256-GCM | Traeger tokens encrypted at rest in database |
+| Push | Web Push API (VAPID) | Background notifications to any subscribed device |
 | Container | s6-overlay on Alpine Linux | Process supervision following LSIO conventions |
 | Build | Vite (client), esbuild (server) | Fast builds with tree-shaking |
 
@@ -225,6 +230,7 @@ id your_user
 │          ├── Better Auth (sessions, users)       │
 │          ├── MQTT Manager (per-user connections) │
 │          ├── SSE Hub (real-time push to browser) │
+│          ├── Web Push (VAPID background alerts)  │
 │          └── Drizzle ORM (migrations, queries)   │
 │                                                 │
 └──────────┬──────────────────────────────────────┘
@@ -240,7 +246,7 @@ id your_user
 
 ## Database Schema
 
-The application manages 12 tables across three domains:
+The application manages 14 tables across four domains:
 
 **Authentication** (managed by Better Auth): `user`, `session`, `account`, `verification`
 
@@ -249,6 +255,8 @@ The application manages 12 tables across three domains:
 **Automation**: `automation_programs` (multi-step cook programs), `custom_templates` (reusable program templates), `program_executions` (execution history)
 
 **Access Control**: `invite_codes`, `email_allowlist`, `app_settings`
+
+**Notifications**: `push_subscriptions` (Web Push endpoints), `notification_preferences` (per-user alert toggles)
 
 Migrations are applied automatically on startup via Drizzle. Migration files are in `drizzle/`.
 
@@ -279,7 +287,7 @@ pnpm install
 # Start dev server (Express + Vite HMR)
 pnpm dev
 
-# Run tests (324 tests across 12 files)
+# Run tests (335 tests across 13 files)
 pnpm test
 
 # Type check
@@ -308,6 +316,7 @@ server/
                    executions, pellet, telemetry, templates, traeger-sessions)
   mqtt-manager.ts  Per-user MQTT connection lifecycle
   sse.ts           Server-Sent Events hub
+  web-push.ts      VAPID key management and push delivery
   crypto.ts        AES-256-GCM encryption for stored tokens
   _core/           Framework plumbing (auth, context, vite bridge)
 
@@ -365,7 +374,7 @@ location / {
 
 | Date | Description |
 |------|-------------|
-| 2025-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Docker/LSIO |
+| 2025-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Web Push notifications, Docker/LSIO |
 
 ---
 

@@ -518,3 +518,33 @@
 - [x] Prune unused dependencies from Docker image
 - [x] Write production-ready README.md for GitHub (LSIO-style)
 - [x] Final Docker build and test (324 tests pass, image builds clean)
+
+## Password Reset — Console-Only (No SMTP)
+- [x] Remove nodemailer dependency and SMTP env var references
+- [x] Ensure Better Auth sendResetPassword logs a clear, copy-pasteable reset link to console/Docker logs
+- [x] Update ForgotPassword page to explain that the admin will provide the reset link
+- [x] Update README.md to document console-only password reset
+
+## Web Push Notifications
+- [x] Install web-push library
+- [x] Auto-generate VAPID key pair on first boot, store in app_settings
+- [x] Add push_subscriptions table (userId, endpoint, keys, createdAt)
+- [x] Add notification_preferences table (per-user alert type toggles)
+- [x] Build subscription management tRPC routes (subscribe, unsubscribe, getVapidKey, getPreferences, setPreferences)
+- [x] Update service worker with push event handler (show notification) and SHOW_NOTIFICATION message handler
+- [x] Add "Enable Notifications" toggle in user Settings page
+- [x] Build notification preferences UI (per-alert-type toggles)
+- [x] Wire server-side alert system to send web push when alerts fire
+- [x] Handle subscription expiry and cleanup (removeSubscription on 410 Gone)
+- [x] Add notification click handler (open app to relevant page)
+- [x] Initialize VAPID keys at server startup
+- [x] Write tests for web push module (11 tests)
+- [x] Rebuild Docker image and verify web-push is included (86.2MB)
+
+## Wire Push to Cook Alerts
+- [x] Push on alertFired (temperature target reached, deviation, probe issues)
+- [x] Push on stallDetected
+- [x] Push on stallBroken
+- [x] Push on phaseChange (automation stage transitions)
+- [x] Push on escalatingAlarm (persistent alarms)
+- [x] Respect per-user notification preferences (sendPushIfEnabled checks prefs before sending)

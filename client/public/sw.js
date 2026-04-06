@@ -102,6 +102,14 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Handle messages from the app (local notification requests)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = event.data;
+    event.waitUntil(self.registration.showNotification(title, options));
+  }
+});
+
 // Handle notification close (for alarm tracking)
 self.addEventListener('notificationclose', (event) => {
   if (event.notification.data?.alarm) {

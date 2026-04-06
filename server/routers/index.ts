@@ -7,4 +7,5 @@ export { automationRouter } from "./automation";
 export { analyticsRouter } from "./analytics";
 export { executionsRouter } from "./executions";
 export { adminRouter } from "./admin";
+export { pushRouter } from "./push";
 export { getValidIdToken, ensureMqttConnected } from "./helpers";

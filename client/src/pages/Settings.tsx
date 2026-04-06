@@ -40,9 +40,12 @@ import {
   Lock,
   ChevronDown,
   Terminal,
+  Bell,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { Switch } from "@/components/ui/switch";
 
 function friendlyError(raw: string): string {
   const lower = raw.toLowerCase();
@@ -117,6 +120,11 @@ export default function Settings() {
   const [showPassword, setShowPassword] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const [legalOpen, setLegalOpen] = useState(false);
+  const push = usePushSubscription();
+  const prefsQuery = trpc.push.getPreferences.useQuery(undefined, { refetchOnWindowFocus: false });
+  const setPrefsMutation = trpc.push.setPreferences.useMutation({
+    onSuccess: () => trpc.useUtils().push.getPreferences.invalidate(),
+  });
 
   const handleConnect = () => {
     if (!email || !password) {
@@ -342,6 +350,128 @@ export default function Settings() {
                   )}
                 </Button>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Push Notifications */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-foreground text-sm font-mono uppercase tracking-wider">
+            <Bell className="h-4 w-4 text-primary" />
+            Push Notifications
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Receive alerts on your phone even when the browser is closed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {push.status === "unsupported" ? (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <AlertTriangle className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-yellow-300">
+                Push notifications are not supported in this browser. Try Chrome, Edge, or Firefox.
+              </div>
+            </div>
+          ) : push.status === "denied" ? (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-red-300">
+                Notification permission was denied. Enable it in your browser settings to receive push alerts.
+              </div>
+            </div>
+          ) : push.status === "subscribed" ? (
+            <>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-400" />
+                  <span className="text-sm text-green-300 font-mono">Push enabled on this device</span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="font-mono text-xs"
+                    onClick={async () => {
+                      const sent = await push.sendTest();
+                      if (sent > 0) toast.success("Test notification sent!");
+                      else toast.error("No notification sent. Check your setup.");
+                    }}
+                  >
+                    Test
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive/30 font-mono text-xs"
+                    onClick={async () => {
+                      await push.unsubscribe();
+                      toast.success("Push notifications disabled");
+                    }}
+                    disabled={push.isLoading}
+                  >
+                    Disable
+                  </Button>
+                </div>
+              </div>
+
+              {/* Notification Preferences */}
+              {prefsQuery.data && (
+                <div className="space-y-3">
+                  <Label className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Alert Types</Label>
+                  <div className="space-y-2">
+                    {([
+                      { key: "alertFired" as const, label: "Temperature Alerts", desc: "When a probe or grill temp alert fires" },
+                      { key: "stallDetected" as const, label: "Stall Detected", desc: "When the meat stall begins (145-175\u00b0F)" },
+                      { key: "stallBroken" as const, label: "Stall Broken", desc: "When the stall ends and temp rises" },
+                      { key: "cookComplete" as const, label: "Cook Complete", desc: "When a cook session ends" },
+                      { key: "probeDisconnect" as const, label: "Grill Disconnect", desc: "When MQTT connection is lost" },
+                      { key: "phaseChange" as const, label: "Phase Changes", desc: "When automation advances to next phase" },
+                      { key: "escalatingAlarm" as const, label: "Escalating Alarms", desc: "Repeated alarms that need attention" },
+                    ]).map(({ key, label, desc }) => (
+                      <div key={key} className="flex items-center justify-between py-1.5">
+                        <div>
+                          <div className="text-sm text-foreground">{label}</div>
+                          <div className="text-xs text-muted-foreground">{desc}</div>
+                        </div>
+                        <Switch
+                          checked={prefsQuery.data[key]}
+                          onCheckedChange={(checked) => setPrefsMutation.mutate({ [key]: checked })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <Button
+              className="w-full bg-primary text-primary-foreground font-mono text-xs"
+              onClick={async () => {
+                const ok = await push.subscribe();
+                if (ok) toast.success("Push notifications enabled!");
+              }}
+              disabled={push.isLoading || push.status === "loading"}
+            >
+              {push.isLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Enabling...
+                </>
+              ) : (
+                <>
+                  <Bell className="h-4 w-4 mr-2" />
+                  Enable Push Notifications
+                </>
+              )}
+            </Button>
+          )}
+
+          {push.error && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-red-300">{push.error}</div>
             </div>
           )}
         </CardContent>

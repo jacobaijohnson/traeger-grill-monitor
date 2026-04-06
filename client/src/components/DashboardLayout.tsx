@@ -40,6 +40,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { useNotificationPermission, usePWAInstall } from "@/hooks/useNotifications";
 import { Bell, BellOff, Download } from "lucide-react";
+import GrillSwitcher from "./GrillSwitcher";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -262,6 +263,7 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            <GrillSwitcher compact={isCollapsed} />
             <SidebarMenu className="px-2 py-1">
               {menuItems.map((item) => {
                 const isActive = location === item.path;

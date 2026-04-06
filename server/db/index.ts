@@ -73,3 +73,14 @@ export {
   type CookByCut,
   type RatingDistribution,
 } from "./analytics";
+
+// Pellet tracking
+export {
+  insertPelletLog,
+  getRecentPelletLogs,
+  getPelletLogsForSession,
+  getPelletConsumptionSummary,
+  getPelletTrend,
+  persistPelletFromMqtt,
+  type PelletConsumptionSummary,
+} from "./pellet";

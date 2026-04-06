@@ -19,6 +19,7 @@ import {
   needsUrlRefresh,
   refreshMqttUrl,
   setDbPersistCallback,
+  setPelletPersistCallback,
   setCookStatePersistCallback,
   hydrateCookState,
   hydrateHistory,
@@ -97,6 +98,13 @@ export async function ensureMqttConnected(userId: number) {
         const sess = await getTraegerSession(uid);
         if (!sess?.selectedGrillId) return;
         await persistTelemetryFromMqtt(uid, telemetry, sess.selectedGrillId, cookSessionId);
+      });
+      // Wire pellet persistence callback
+      setPelletPersistCallback(userId, async (uid: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => {
+        const sess = await getTraegerSession(uid);
+        if (!sess?.selectedGrillId) return;
+        const { persistPelletFromMqtt } = await import("../db/pellet");
+        await persistPelletFromMqtt(uid, sess.selectedGrillId, pelletLevel, grillTemp, cookSessionId);
       });
       // Wire cook state persistence callback
       setCookStatePersistCallback(userId, async (uid, cook) => {

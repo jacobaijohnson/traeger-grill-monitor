@@ -1,4 +1,4 @@
-import { getDb, withDbRetry, eq, desc } from "./connection";
+import { getDb, withDbRetry, eq, and, desc } from "./connection";
 import { cookSessions } from "../../drizzle/schema";
 
 // ===== Analytics Interfaces =====
@@ -60,12 +60,15 @@ const EMPTY_SUMMARY: CookAnalyticsSummary = {
   ratedCooks: 0, bestRatedCook: null, longestCook: null,
 };
 
-export async function getCookAnalyticsSummary(userId: number): Promise<CookAnalyticsSummary> {
+export async function getCookAnalyticsSummary(userId: number, grillId?: string): Promise<CookAnalyticsSummary> {
   const result = await withDbRetry(async (db) => {
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
     const sessions = await db
       .select()
       .from(cookSessions)
-      .where(eq(cookSessions.userId, userId))
+      .where(conditions)
       .orderBy(desc(cookSessions.startedAt));
 
     if (sessions.length === 0) return EMPTY_SUMMARY;
@@ -119,9 +122,12 @@ export async function getCookAnalyticsSummary(userId: number): Promise<CookAnaly
   return result ?? EMPTY_SUMMARY;
 }
 
-export async function getCooksByMeatType(userId: number): Promise<CookByMeatType[]> {
+export async function getCooksByMeatType(userId: number, grillId?: string): Promise<CookByMeatType[]> {
   return await withDbRetry(async (db) => {
-    const sessions = await db.select().from(cookSessions).where(eq(cookSessions.userId, userId));
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
+    const sessions = await db.select().from(cookSessions).where(conditions);
     const grouped = new Map<string, { count: number; totalDur: number; durCount: number; totalRating: number; ratedCount: number; completedCount: number }>();
 
     for (const s of sessions) {
@@ -149,9 +155,12 @@ export async function getCooksByMeatType(userId: number): Promise<CookByMeatType
   }, "getCooksByMeatType") ?? [];
 }
 
-export async function getCooksByMethod(userId: number): Promise<CookByMethod[]> {
+export async function getCooksByMethod(userId: number, grillId?: string): Promise<CookByMethod[]> {
   return await withDbRetry(async (db) => {
-    const sessions = await db.select().from(cookSessions).where(eq(cookSessions.userId, userId));
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
+    const sessions = await db.select().from(cookSessions).where(conditions);
     const grouped = new Map<string, { count: number; totalDur: number; durCount: number; totalRating: number; ratedCount: number }>();
 
     for (const s of sessions) {
@@ -177,12 +186,15 @@ export async function getCooksByMethod(userId: number): Promise<CookByMethod[]> 
   }, "getCooksByMethod") ?? [];
 }
 
-export async function getCooksByMonth(userId: number): Promise<CookByMonth[]> {
+export async function getCooksByMonth(userId: number, grillId?: string): Promise<CookByMonth[]> {
   return await withDbRetry(async (db) => {
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
     const sessions = await db
       .select()
       .from(cookSessions)
-      .where(eq(cookSessions.userId, userId))
+      .where(conditions)
       .orderBy(cookSessions.startedAt);
 
     const grouped = new Map<string, { count: number; totalRating: number; ratedCount: number; totalMinutes: number }>();
@@ -211,9 +223,12 @@ export async function getCooksByMonth(userId: number): Promise<CookByMonth[]> {
   }, "getCooksByMonth") ?? [];
 }
 
-export async function getCooksByCut(userId: number): Promise<CookByCut[]> {
+export async function getCooksByCut(userId: number, grillId?: string): Promise<CookByCut[]> {
   return await withDbRetry(async (db) => {
-    const sessions = await db.select().from(cookSessions).where(eq(cookSessions.userId, userId));
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
+    const sessions = await db.select().from(cookSessions).where(conditions);
     const grouped = new Map<string, { meatType: string | null; count: number; totalDur: number; durCount: number; totalRating: number; ratedCount: number; bestRating: number | null; totalPeakProbe: number; peakCount: number }>();
 
     for (const s of sessions) {
@@ -251,9 +266,12 @@ export async function getCooksByCut(userId: number): Promise<CookByCut[]> {
   }, "getCooksByCut") ?? [];
 }
 
-export async function getRatingDistribution(userId: number): Promise<RatingDistribution[]> {
+export async function getRatingDistribution(userId: number, grillId?: string): Promise<RatingDistribution[]> {
   return await withDbRetry(async (db) => {
-    const sessions = await db.select().from(cookSessions).where(eq(cookSessions.userId, userId));
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
+    const sessions = await db.select().from(cookSessions).where(conditions);
     const dist = new Map<number, number>();
     for (let r = 1; r <= 5; r++) dist.set(r, 0);
 

@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTraegerStatus } from "@/hooks/useTraeger";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,12 +7,13 @@ import { Separator } from "@/components/ui/separator";
 import {
   BarChart3, Flame, Clock, Star, TrendingUp, Trophy,
   ChefHat, Loader2, Beef, Timer, Award, Target,
+  Battery, Droplets,
 } from "lucide-react";
 import { useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend,
-  AreaChart, Area,
+  PieChart, Pie, Cell, CartesianGrid, Legend,
+  AreaChart, Area, LineChart, Line,
 } from "recharts";
 
 // ─── Color Palette ────────────────────────────────────
@@ -114,13 +116,25 @@ function EmptyAnalytics() {
 
 export default function Analytics() {
   const { user } = useAuth();
+  const { data: status } = useTraegerStatus();
 
-  const summaryQuery = trpc.analytics.summary.useQuery(undefined, { enabled: !!user });
-  const meatTypeQuery = trpc.analytics.byMeatType.useQuery(undefined, { enabled: !!user });
-  const methodQuery = trpc.analytics.byMethod.useQuery(undefined, { enabled: !!user });
-  const monthQuery = trpc.analytics.byMonth.useQuery(undefined, { enabled: !!user });
-  const cutQuery = trpc.analytics.byCut.useQuery(undefined, { enabled: !!user });
-  const ratingQuery = trpc.analytics.ratingDistribution.useQuery(undefined, { enabled: !!user });
+  // Use the selected grill ID for all queries — ensures data isolation per grill
+  const grillId = status?.selectedGrillId;
+  const grillInput = useMemo(() => grillId ? { grillId } : undefined, [grillId]);
+
+  const summaryQuery = trpc.analytics.summary.useQuery(grillInput, { enabled: !!user });
+  const meatTypeQuery = trpc.analytics.byMeatType.useQuery(grillInput, { enabled: !!user });
+  const methodQuery = trpc.analytics.byMethod.useQuery(grillInput, { enabled: !!user });
+  const monthQuery = trpc.analytics.byMonth.useQuery(grillInput, { enabled: !!user });
+  const cutQuery = trpc.analytics.byCut.useQuery(grillInput, { enabled: !!user });
+  const ratingQuery = trpc.analytics.ratingDistribution.useQuery(grillInput, { enabled: !!user });
+
+  // Pellet analytics
+  const pelletSummaryQuery = trpc.analytics.pelletSummary.useQuery(grillInput, { enabled: !!user });
+  const pelletTrendQuery = trpc.analytics.pelletTrend.useQuery(
+    grillId ? { grillId, days: 30 } : { days: 30 },
+    { enabled: !!user }
+  );
 
   const isLoading = summaryQuery.isLoading || meatTypeQuery.isLoading;
   const summary = summaryQuery.data;
@@ -129,6 +143,8 @@ export default function Analytics() {
   const byMonth = monthQuery.data || [];
   const byCut = cutQuery.data || [];
   const ratingDist = ratingQuery.data || [];
+  const pelletSummary = pelletSummaryQuery.data;
+  const pelletTrend = pelletTrendQuery.data || [];
 
   // Prepare chart data
   const meatChartData = useMemo(() =>
@@ -178,10 +194,27 @@ export default function Analytics() {
     [ratingDist]
   );
 
+  // Pellet trend chart data
+  const pelletTrendData = useMemo(() =>
+    pelletTrend.map((p: any) => ({
+      time: new Date(p.recordedAt).toLocaleDateString([], { month: "short", day: "numeric" }),
+      timestamp: new Date(p.recordedAt).getTime(),
+      "Pellet Level": p.pelletLevel,
+      "Burn Rate": p.burnRateLbsPerHr ? Math.round(p.burnRateLbsPerHr * 100) / 100 : null,
+      "Grill Temp": p.grillTemp,
+    })),
+    [pelletTrend]
+  );
+
   // Completion rate
   const completionRate = summary && summary.totalCooks > 0
     ? Math.round((summary.completedCooks / summary.totalCooks) * 100)
     : 0;
+
+  // Current grill name for header
+  const selectedGrill = status?.grills?.find(
+    (g: { thingName: string }) => g.thingName === status?.selectedGrillId
+  );
 
   if (!user) return null;
 
@@ -206,7 +239,7 @@ export default function Analytics() {
           Cook Analytics
         </h1>
         <p className="text-sm text-muted-foreground font-mono mt-1">
-          Your cooking performance at a glance
+          {selectedGrill ? `${selectedGrill.friendlyName} — ` : ""}Your cooking performance at a glance
         </p>
       </div>
 
@@ -281,6 +314,137 @@ export default function Analytics() {
 
       <Separator className="opacity-30" />
 
+      {/* ═══ Pellet Consumption Section ═══ */}
+      {pelletSummary && pelletSummary.totalLogsRecorded > 0 && (
+        <>
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+              <Battery className="h-5 w-5 text-green-400" />
+              Pellet Consumption
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                icon={Battery}
+                label="Current Level"
+                value={pelletSummary.currentLevel !== null ? `${pelletSummary.currentLevel}%` : "—"}
+                subtext={`Range: ${pelletSummary.lowestLevel}% – ${pelletSummary.highestLevel}%`}
+                color="text-green-400"
+              />
+              <StatCard
+                icon={Flame}
+                label="Avg Burn Rate"
+                value={pelletSummary.avgBurnRateLbsPerHr !== null ? `${pelletSummary.avgBurnRateLbsPerHr}` : "—"}
+                subtext="lbs/hr"
+                color="text-orange-400"
+              />
+              <StatCard
+                icon={Droplets}
+                label="Est. Total Burned"
+                value={pelletSummary.estimatedTotalLbsBurned !== null ? `${pelletSummary.estimatedTotalLbsBurned}` : "—"}
+                subtext="lbs"
+                color="text-red-400"
+              />
+              <StatCard
+                icon={BarChart3}
+                label="Data Points"
+                value={pelletSummary.totalLogsRecorded}
+                subtext="pellet readings"
+                color="text-cyan-400"
+              />
+            </div>
+          </div>
+
+          {/* Burn Rate by Temperature Range */}
+          {pelletSummary.burnRateByTemp.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-mono flex items-center gap-2">
+                  <Flame className="h-4 w-4 text-orange-400" />
+                  Burn Rate by Temperature
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart
+                    data={pelletSummary.burnRateByTemp.map(b => ({
+                      name: b.tempRange,
+                      "Burn Rate (lbs/hr)": b.avgBurnRate,
+                      Samples: b.sampleCount,
+                    }))}
+                    margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="Burn Rate (lbs/hr)" fill="#f97316" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pellet Level Trend */}
+          {pelletTrendData.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-mono flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-400" />
+                  Pellet Level Trend (30 days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={pelletTrendData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="pelletGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis dataKey="time" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis
+                      yAxisId="left"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      label={{ value: "%", position: "insideTopLeft", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                      label={{ value: "lbs/hr", position: "insideTopRight", fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="Pellet Level"
+                      stroke="#22c55e"
+                      fill="url(#pelletGradient)"
+                      strokeWidth={2}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="Burn Rate"
+                      stroke="#f97316"
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          <Separator className="opacity-30" />
+        </>
+      )}
+
       {/* Charts Row 1: Meat Type Distribution + Pie */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Bar: Cooks by Meat Type */}
@@ -293,7 +457,7 @@ export default function Analytics() {
           </CardHeader>
           <CardContent>
             {meatChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={240}>
                 <BarChart data={meatChartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />

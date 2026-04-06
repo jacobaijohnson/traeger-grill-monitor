@@ -117,6 +117,7 @@ export const liveCookRouter = router({
 
           await insertCookAlert({
             userId: ctx.user.id,
+            grillId: input.grillId,
             cookSessionId: sessionId,
             alertType: marker.alertType,
             label: marker.label,
@@ -200,6 +201,7 @@ export const liveCookRouter = router({
       if (dbSession) {
         await insertCookAlert({
           userId: ctx.user.id,
+          grillId: dbSession.grillId,
           cookSessionId: dbSession.id,
           alertType: input.alertType,
           label: input.label,

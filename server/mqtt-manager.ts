@@ -45,10 +45,13 @@ interface MqttSession {
   firedAlerts: CookAlert[]; // alerts that fired (for missed alerts panel)
   dbPersistInterval: ReturnType<typeof setInterval> | null;
   dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
+  pelletPersistCallback: ((userId: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>) | null;
   cookStatePersistCallback: ((userId: number, cook: ActiveCookSession) => Promise<void>) | null;
   // RC-4: Backpressure flag — skip persist if previous one is still in flight
   persistInFlight: boolean;
+  pelletPersistInFlight: boolean;
   cookStatePersistInFlight: boolean;
+  lastPelletPersistTime: number;
 }
 
 // In-memory store of active MQTT sessions keyed by userId
@@ -210,9 +213,12 @@ export function connectMqtt(
     firedAlerts: existing?.firedAlerts || [],
     dbPersistInterval: null,
     dbPersistCallback: existing?.dbPersistCallback || null,
+    pelletPersistCallback: existing?.pelletPersistCallback || null,
     cookStatePersistCallback: existing?.cookStatePersistCallback || null,
     persistInFlight: false,
+    pelletPersistInFlight: false,
     cookStatePersistInFlight: false,
+    lastPelletPersistTime: 0,
   };
 
   sessions.set(userId, session);
@@ -352,6 +358,30 @@ export function connectMqtt(
           session.persistInFlight = false;
         }
       }
+      // Pellet persistence: log every 5 minutes (every 10th interval of 30s)
+      const now = Date.now();
+      if (
+        session.pelletPersistCallback &&
+        session.telemetry.connected &&
+        session.telemetry.pelletLevel > 0 &&
+        !session.pelletPersistInFlight &&
+        (now - session.lastPelletPersistTime) >= 300000 // 5 minutes
+      ) {
+        session.pelletPersistInFlight = true;
+        try {
+          await session.pelletPersistCallback(
+            userId,
+            session.telemetry.pelletLevel,
+            session.telemetry.grill,
+            session.activeCook?.cookSessionId
+          );
+          session.lastPelletPersistTime = now;
+        } catch (err) {
+          console.error(`[MQTT] User ${userId}: Pellet persist error:`, err);
+        } finally {
+          session.pelletPersistInFlight = false;
+        }
+      }
     }, 30000);
 
   } catch (err) {
@@ -371,6 +401,7 @@ export function disconnectMqtt(userId: number): void {
     }
     // Null out callbacks to prevent any in-flight persist from writing after disconnect
     session.dbPersistCallback = null;
+    session.pelletPersistCallback = null;
     session.cookStatePersistCallback = null;
     // Now close the MQTT client
     if (session.client) {
@@ -588,6 +619,16 @@ export function setDbPersistCallback(
   const session = sessions.get(userId);
   if (session) {
     session.dbPersistCallback = callback;
+  }
+}
+
+export function setPelletPersistCallback(
+  userId: number,
+  callback: (userId: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>
+): void {
+  const session = sessions.get(userId);
+  if (session) {
+    session.pelletPersistCallback = callback;
   }
 }
 

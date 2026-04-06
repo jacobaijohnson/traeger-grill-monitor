@@ -234,3 +234,51 @@
 - [x] Add text search bar to Cook Guide that filters by name, cut, method, and description across all tabs
 - [x] Fix DB ECONNRESET errors in MQTT telemetry persist — RC-1: mysql2 pool with keepAlive + withDbRetry wrapper
 - [x] Audit and fix all race conditions: RC-1 DB pool+retry, RC-2 connection mutex, RC-3 disconnect cleanup order, RC-4 persist backpressure
+
+## Pellet Consumption Tracking
+- [x] Create pellet_logs table (grillId, userId, timestamp, pelletLevel, estimatedLbs, sessionId)
+- [x] Track pellet level changes from MQTT telemetry and log consumption per cook
+- [x] Calculate burn rate (lbs/hr) per cook session
+- [ ] Add pellet consumption panel to Dashboard
+- [ ] Add pellet trends chart to Analytics page
+
+## Multi-Grill Support
+- [x] Add grillId column to telemetry_readings table (already existed)
+- [x] Add grillId column to cook_sessions table (already existed)
+- [x] Update MQTT manager — added pellet persist callback with grill-aware wiring
+- [x] Update all DB queries to filter by grillId
+- [x] Update all router endpoints to accept/filter by grillId
+- [ ] Build grill switcher UI component in sidebar/header
+- [ ] Ensure all data (telemetry, sessions, analytics, pellets) is isolated by grillId
+
+## DSS Audit — Confirm DSS-1 Classification
+- [x] Scan all source code for Meta internal references (fbid, workplace, intern, phabricator, etc.)
+- [x] Scan for Meta IP or proprietary code patterns
+- [x] Scan for any DSS-2+ data (PII, employee data, internal URLs, internal tool references)
+- [x] Confirm all external APIs used are public (Traeger, AWS Cognito, MQTT)
+- [x] Confirm no Meta-specific MCP servers or internal tools are referenced in app code
+- [x] Document DSS-1 classification rationale
+
+## Full Session/Task DSS Audit — Content & Data Flow Review
+- [x] Audit conversation content: no Meta internal data discussed or referenced
+- [x] Audit data flows: no internal APIs, endpoints, or services used in app logic
+- [x] Audit all external API endpoints: confirm all are public Traeger/AWS services
+- [x] Audit Cognito Client ID: confirm publicly available (not proprietary)
+- [x] Audit MQTT topics/endpoints: confirm from public Traeger IoT infrastructure
+- [x] Audit sandbox artifacts: no internal docs, screenshots, or data cached in workspace — CLEANED (deleted 3 files)
+- [x] Audit todo.md and SPEC_FORGE_REVIEW.md for any internal process references — SPEC_FORGE is dev artifact only
+- [x] Audit database schema: no columns storing Meta/internal identifiers
+- [x] Audit user data model: only stores Manus OAuth + Traeger account data (no FBID, no corp data)
+- [x] Confirm no MCP server calls were made that injected internal data into the project
+- [x] Establish guardrails: document what MUST NOT enter this project going forward — added to .gitignore + DSS doc
+- [x] Write DSS-1 classification report with rationale — DSS_CLASSIFICATION.md
+
+## Docker — LinuxServer.io Compatible
+- [x] Rewrite Dockerfile to use LSIO base image with s6-overlay
+- [x] Add PUID/PGID/TZ environment variable support
+- [x] Create s6-overlay service definitions for Node process supervision
+- [x] Create init scripts for /config volume setup and permissions
+- [x] Add LSIO-standard labels and metadata
+- [x] Update docker-compose.yml for LSIO conventions (/config volume, PUID/PGID)
+- [x] Update ENV_TEMPLATE.md with LSIO-specific variables
+- [x] Create .dockerignore for clean builds

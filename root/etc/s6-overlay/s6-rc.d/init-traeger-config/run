@@ -1,0 +1,15 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+
+echo "─── Traeger Smoker Insight: Initializing ───"
+
+# Ensure /config directory exists and has correct ownership
+mkdir -p /config
+
+# Set ownership of config directory to abc user (PUID/PGID)
+lsiown -R abc:abc /config
+
+# Set ownership of app directory
+lsiown -R abc:abc /app
+
+echo "─── Traeger Smoker Insight: Config initialized ───"

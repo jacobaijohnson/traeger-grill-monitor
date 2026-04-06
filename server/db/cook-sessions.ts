@@ -37,12 +37,15 @@ export async function updateCookSessionNotes(id: number, notes: string, rating?:
   }, "updateCookSessionNotes");
 }
 
-export async function getUserCookSessions(userId: number, limit = 50) {
+export async function getUserCookSessions(userId: number, limit = 50, grillId?: string) {
   return await withDbRetry(async (db) => {
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
+      : eq(cookSessions.userId, userId);
     return db
       .select()
       .from(cookSessions)
-      .where(eq(cookSessions.userId, userId))
+      .where(conditions)
       .orderBy(desc(cookSessions.startedAt))
       .limit(limit);
   }, "getUserCookSessions") ?? [];
@@ -58,17 +61,15 @@ export async function getCookSession(id: number, userId?: number) {
   }, "getCookSession");
 }
 
-export async function getActiveCookSession(userId: number) {
+export async function getActiveCookSession(userId: number, grillId?: string) {
   return await withDbRetry(async (db) => {
+    const conditions = grillId
+      ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId), eq(cookSessions.status, "active"))
+      : and(eq(cookSessions.userId, userId), eq(cookSessions.status, "active"));
     const result = await db
       .select()
       .from(cookSessions)
-      .where(
-        and(
-          eq(cookSessions.userId, userId),
-          eq(cookSessions.status, "active")
-        )
-      )
+      .where(conditions)
       .orderBy(desc(cookSessions.startedAt))
       .limit(1);
     return result.length > 0 ? result[0] : undefined;

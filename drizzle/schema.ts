@@ -81,6 +81,7 @@ export type InsertCookSession = typeof cookSessions.$inferInsert;
 export const cookAlerts = mysqlTable("cook_alerts", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
+  grillId: varchar("grillId", { length: 128 }),
   cookSessionId: int("cookSessionId").notNull(),
   alertType: varchar("alertType", { length: 16 }).notNull(), // notification, alarm
   label: varchar("label", { length: 128 }).notNull(),
@@ -94,6 +95,22 @@ export const cookAlerts = mysqlTable("cook_alerts", {
 
 export type CookAlert = typeof cookAlerts.$inferSelect;
 export type InsertCookAlert = typeof cookAlerts.$inferInsert;
+
+// Pellet consumption logs (time-series pellet level tracking)
+export const pelletLogs = mysqlTable("pellet_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  grillId: varchar("grillId", { length: 128 }).notNull(),
+  cookSessionId: int("cookSessionId"),
+  pelletLevel: int("pelletLevel").notNull(), // 0-100 percentage
+  estimatedLbs: float("estimatedLbs"), // estimated lbs remaining
+  burnRateLbsPerHr: float("burnRateLbsPerHr"), // calculated burn rate
+  grillTemp: float("grillTemp"), // grill temp at time of reading (affects burn rate)
+  recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+});
+
+export type PelletLog = typeof pelletLogs.$inferSelect;
+export type InsertPelletLog = typeof pelletLogs.$inferInsert;
 
 // Automation programs (multi-stage cook programs)
 export const automationPrograms = mysqlTable("automation_programs", {

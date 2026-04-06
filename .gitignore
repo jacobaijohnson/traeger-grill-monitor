@@ -109,5 +109,13 @@ temp/
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
 
+# Manus runtime logs (never commit)
+.manus-logs/
+
+# Session artifacts — development observations, never commit
+screenshot-*.md
+screenshot-*.txt
+design-notes.md
+
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json

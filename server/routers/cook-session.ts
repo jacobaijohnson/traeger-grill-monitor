@@ -53,9 +53,9 @@ export const cookSessionRouter = router({
     }),
 
   list: protectedProcedure
-    .input(z.object({ limit: z.number().default(50) }).optional())
+    .input(z.object({ limit: z.number().default(50), grillId: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return getUserCookSessions(ctx.user.id, input?.limit ?? 50);
+      return getUserCookSessions(ctx.user.id, input?.limit ?? 50, input?.grillId);
     }),
 
   get: protectedProcedure

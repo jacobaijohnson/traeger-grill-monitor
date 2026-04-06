@@ -111,9 +111,12 @@ function ExportCsvButton({ sessionId }: { sessionId: number }) {
 export default function History() {
   const [, setLocation] = useLocation();
   const { data: status } = useTraegerStatus();
-  const { data: sessions, refetch } = trpc.cookSession.list.useQuery(undefined, {
-    enabled: !!status?.connected,
-  });
+  // Filter sessions by selected grill for multi-grill isolation
+  const grillId = status?.selectedGrillId;
+  const { data: sessions, refetch } = trpc.cookSession.list.useQuery(
+    grillId ? { grillId } : undefined,
+    { enabled: !!status?.connected }
+  );
   const updateNotes = trpc.cookSession.updateNotes.useMutation({
     onSuccess: () => {
       refetch();

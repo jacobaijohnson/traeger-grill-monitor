@@ -1,0 +1,37 @@
+# Dependencies (rebuilt in container)
+node_modules/
+
+# Build output (rebuilt in container)
+dist/
+
+# Development files
+.manus-logs/
+.git/
+.gitignore
+
+# Session artifacts (DSS guardrail)
+screenshot-*.md
+screenshot-*.txt
+design-notes.md
+*-observations.md
+
+# Documentation (not needed in image)
+*.md
+!README.md
+!ENV_TEMPLATE.md
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (avoid recursive builds)
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore

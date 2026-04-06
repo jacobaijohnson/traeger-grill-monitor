@@ -368,6 +368,57 @@ export function getActiveSessionUserIds(): number[] {
   return Array.from(sessions.keys());
 }
 
+/**
+ * Hydrate in-memory history from DB records.
+ * Called after connectMqtt to restore history that was lost on restart.
+ * Deduplicates against any points already in memory.
+ */
+export function hydrateHistory(
+  userId: number,
+  dbRecords: Array<{
+    recordedAt: Date;
+    grillTemp: number;
+    probeTemp: number | null;
+    ambientTemp: number | null;
+    targetTemp: number | null;
+    pelletLevel: number | null;
+    systemStatus: number | null;
+  }>
+): number {
+  const session = sessions.get(userId);
+  if (!session) return 0;
+
+  // Find the earliest timestamp already in memory
+  const earliestInMemory = session.history.length > 0
+    ? session.history[0].timestamp
+    : Infinity;
+
+  // Convert DB records to history format, only add those before our earliest in-memory point
+  const dbPoints: Array<TraegerTelemetry & { timestamp: number }> = dbRecords
+    .filter(r => r.recordedAt.getTime() < earliestInMemory)
+    .map(r => ({
+      ...DEFAULT_TELEMETRY,
+      grill: r.grillTemp,
+      probe: r.probeTemp ?? 0,
+      ambient: r.ambientTemp ?? 0,
+      set: r.targetTemp ?? 0,
+      pelletLevel: r.pelletLevel ?? 0,
+      systemStatus: r.systemStatus ?? 99,
+      connected: true,
+      timestamp: r.recordedAt.getTime(),
+    }));
+
+  // Prepend DB points before in-memory points
+  session.history = [...dbPoints, ...session.history];
+
+  // Trim to max 2000 points (allow more since we're hydrating)
+  if (session.history.length > 2000) {
+    session.history = session.history.slice(-2000);
+  }
+
+  return dbPoints.length;
+}
+
 // ─── Cook Session Lifecycle ─────────────────────────────
 
 export function startCookSession(

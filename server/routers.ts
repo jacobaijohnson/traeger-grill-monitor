@@ -74,6 +74,7 @@ import {
   removeAlert as mqttRemoveAlert,
   setDbPersistCallback,
   type CookAlert as MqttCookAlert,
+  hydrateHistory,
 } from "./mqtt-manager";
 
 // Helper to get valid Traeger idToken, refreshing if needed.
@@ -115,6 +116,16 @@ async function ensureMqttConnected(userId: number) {
         if (!sess?.selectedGrillId) return;
         await persistTelemetryFromMqtt(uid, telemetry, sess.selectedGrillId, cookSessionId);
       });
+      // Hydrate in-memory history from DB (last 8 hours)
+      try {
+        const dbHistory = await getRecentTelemetry(userId, session.selectedGrillId, 480);
+        if (dbHistory.length > 0) {
+          const hydrated = hydrateHistory(userId, dbHistory);
+          console.log(`[Telemetry] Hydrated ${hydrated} DB points for user ${userId}`);
+        }
+      } catch (err) {
+        console.error("[Telemetry] Failed to hydrate history:", err);
+      }
       // Trigger status request
       try {
         await traegerSendCommand(idToken, session.selectedGrillId, COMMANDS.STATUS_REQUEST);

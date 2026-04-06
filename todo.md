@@ -190,3 +190,10 @@
 - [x] Analytics page UI with stat cards, bar charts, and trend lines
 - [x] Add Analytics navigation entry in sidebar
 - [x] Write tests for analytics queries
+
+## Bug Fixes
+- [x] Dashboard temperature graph only showing 3 data points instead of 26+ (fixed: hydrate from DB on restart)
+- [x] Hydrate telemetry history from DB on server startup so data survives restarts
+- [x] Add session gap detection — identify contiguous vs. non-contiguous time segments
+- [x] Add visual breaks/gaps in TemperatureGraph when sessions are non-contiguous
+- [x] Add real time axis to graph showing actual clock time alongside elapsed

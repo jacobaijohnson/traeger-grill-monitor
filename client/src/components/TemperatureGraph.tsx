@@ -213,15 +213,80 @@ export default function TemperatureGraph({
   const canStepForward = offset > 0;
   const isAtLatest = offset === 0;
 
-  // Format X axis labels
-  const chartData = useMemo(() => {
-    return filteredData.map((d) => ({
-      ...d,
-      timeLabel: cookStartTime
-        ? formatElapsed(d.timestamp - cookStartTime)
-        : formatTime(d.timestamp),
-    }));
+  // Gap threshold: if two consecutive points are >5 minutes apart, it's a session gap
+  const GAP_THRESHOLD_MS = 5 * 60 * 1000;
+
+  // Detect session gaps and insert null-value break points
+  const chartDataWithGaps = useMemo(() => {
+    if (filteredData.length < 2) {
+      return filteredData.map((d) => ({
+        ...d,
+        timeLabel: cookStartTime
+          ? formatElapsed(d.timestamp - cookStartTime)
+          : formatTime(d.timestamp),
+        isGap: false,
+      }));
+    }
+
+    const result: Array<typeof filteredData[0] & { timeLabel: string; isGap: boolean; grill: number | null; probe: number | null; ambient: number | null; set: number | null }> = [];
+
+    for (let i = 0; i < filteredData.length; i++) {
+      const d = filteredData[i];
+      const prev = i > 0 ? filteredData[i - 1] : null;
+
+      // Insert a gap marker if there's a big time jump
+      if (prev && d.timestamp - prev.timestamp > GAP_THRESHOLD_MS) {
+        // Insert a null-point to break the line
+        result.push({
+          ...d,
+          timestamp: prev.timestamp + 1000,
+          grill: null as any,
+          probe: null as any,
+          ambient: null as any,
+          set: null as any,
+          timeLabel: "---",
+          isGap: true,
+        });
+      }
+
+      result.push({
+        ...d,
+        timeLabel: cookStartTime
+          ? formatElapsed(d.timestamp - cookStartTime)
+          : formatTime(d.timestamp),
+        isGap: false,
+      });
+    }
+
+    return result;
   }, [filteredData, cookStartTime]);
+
+  // Use chartDataWithGaps as the chart data
+  const chartData = chartDataWithGaps;
+
+  // Count session segments (gaps + 1)
+  const sessionCount = useMemo(() => {
+    return chartData.filter(d => d.isGap).length + (chartData.length > 0 ? 1 : 0);
+  }, [chartData]);
+
+  // Session gap timestamps for ReferenceArea shading
+  const gapRegions = useMemo(() => {
+    const regions: Array<{ startLabel: string; endLabel: string }> = [];
+    for (let i = 0; i < chartData.length; i++) {
+      if (chartData[i].isGap && i + 1 < chartData.length) {
+        // The gap is between the previous real point and the next real point
+        const prevReal = i > 0 ? chartData[i - 1] : null;
+        const nextReal = chartData[i + 1];
+        if (prevReal && nextReal) {
+          regions.push({
+            startLabel: prevReal.timeLabel,
+            endLabel: nextReal.timeLabel,
+          });
+        }
+      }
+    }
+    return regions;
+  }, [chartData]);
 
   // Calculate Y axis domain
   const yDomain = useMemo(() => {
@@ -462,7 +527,28 @@ export default function TemperatureGraph({
               />
             ))}
 
-          {/* Temperature lines */}
+          {/* Gap region shading */}
+          {gapRegions.map((gap, i) => (
+            <ReferenceArea
+              key={`gap-${i}`}
+              x1={gap.startLabel}
+              x2={gap.endLabel}
+              fill="hsl(var(--muted))"
+              fillOpacity={0.15}
+              stroke="hsl(var(--muted-foreground))"
+              strokeOpacity={0.2}
+              strokeDasharray="4 4"
+              label={{
+                value: "gap",
+                position: "insideTop",
+                fill: "hsl(var(--muted-foreground))",
+                fontSize: 9,
+                fontFamily: "monospace",
+              }}
+            />
+          ))}
+
+          {/* Temperature lines — connectNulls=false to break at gaps */}
           <Line
             type="monotone"
             dataKey="grill"
@@ -471,6 +557,7 @@ export default function TemperatureGraph({
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 3, fill: "#f59e0b" }}
+            connectNulls={false}
           />
           <Line
             type="monotone"
@@ -480,6 +567,7 @@ export default function TemperatureGraph({
             strokeWidth={2.5}
             dot={false}
             activeDot={{ r: 4, fill: "#ef4444" }}
+            connectNulls={false}
           />
           {showAmbient && (
             <Line
@@ -491,6 +579,7 @@ export default function TemperatureGraph({
               strokeDasharray="4 2"
               dot={false}
               activeDot={{ r: 2 }}
+              connectNulls={false}
             />
           )}
           {showTarget && (
@@ -503,6 +592,7 @@ export default function TemperatureGraph({
               strokeDasharray="8 4"
               dot={false}
               activeDot={{ r: 2 }}
+              connectNulls={false}
             />
           )}
         </LineChart>
@@ -513,7 +603,7 @@ export default function TemperatureGraph({
 
       {/* Data info */}
       <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground font-mono">
-        <span>{chartData.length} data points</span>
+        <span>{chartData.filter(d => !d.isGap).length} data points{sessionCount > 1 ? ` · ${sessionCount} sessions` : ""}</span>
         {cookStartTime && chartData.length > 0 && (
           <span>
             Cook duration: {formatElapsed(Date.now() - cookStartTime)}

@@ -320,3 +320,276 @@ describe("input validation", () => {
     await expect(caller.grill.setProbeAlarm({ temp: 250 })).rejects.toThrow();
   });
 });
+
+// ===== Cut Catalog Tests =====
+
+import {
+  ALL_CUTS,
+  CUT_CATEGORIES,
+  getCutsByCategory,
+  getCutById,
+  searchCuts,
+  estimateCookTime,
+  getDefaultDoneness,
+  buildCookConfig,
+  type CutDefinition,
+  type CookConfig,
+} from "../shared/cut-catalog";
+import { MEAT_PROFILES, getMeatProfile } from "../shared/meat-science";
+
+describe("Cut Catalog Data Integrity", () => {
+  it("should have cuts for every category", () => {
+    for (const cat of CUT_CATEGORIES) {
+      const cuts = getCutsByCategory(cat.id);
+      expect(cuts.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("ALL_CUTS should have unique IDs", () => {
+    const ids = ALL_CUTS.map((c) => c.id);
+    const unique = new Set(ids);
+    expect(unique.size).toBe(ids.length);
+  });
+
+  it("each cut should have required fields", () => {
+    for (const cut of ALL_CUTS) {
+      expect(cut.id).toBeTruthy();
+      expect(cut.name).toBeTruthy();
+      expect(cut.category).toBeTruthy();
+      expect(CUT_CATEGORIES.map((c) => c.id)).toContain(cut.category);
+      expect(cut.meatProfileId).toBeTruthy();
+      expect(["smoke", "grill", "reverse_sear", "roast"]).toContain(cut.defaultMethod);
+      expect(cut.defaultGrillTemp).toBeGreaterThanOrEqual(150);
+      expect(cut.defaultGrillTemp).toBeLessThanOrEqual(500);
+      expect(cut.doneness.length).toBeGreaterThan(0);
+      expect(typeof cut.hasStall).toBe("boolean");
+      expect(typeof cut.wrapRecommended).toBe("boolean");
+      expect(typeof cut.restMinutes).toBe("number");
+      expect(Array.isArray(cut.tips)).toBe(true);
+    }
+  });
+
+  it("each doneness level should have valid temperatures", () => {
+    for (const cut of ALL_CUTS) {
+      for (const d of cut.doneness) {
+        expect(d.id).toBeTruthy();
+        expect(d.label).toBeTruthy();
+        expect(d.pullTemp).toBeGreaterThan(0);
+        expect(d.finalTemp).toBeGreaterThanOrEqual(d.pullTemp);
+        expect(d.description).toBeTruthy();
+        expect(typeof d.isSafe).toBe("boolean");
+      }
+    }
+  });
+
+  it("thickness options should have valid multipliers", () => {
+    for (const cut of ALL_CUTS) {
+      if (cut.thicknessOptions) {
+        for (const t of cut.thicknessOptions) {
+          expect(t.id).toBeTruthy();
+          expect(t.label).toBeTruthy();
+          expect(t.inches).toBeGreaterThan(0);
+          expect(t.timeMultiplier).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("weight-relevant cuts should have timePerPoundMinutes", () => {
+    for (const cut of ALL_CUTS) {
+      if (cut.weightRelevant) {
+        expect(cut.timePerPoundMinutes).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("Cut Catalog Lookup Functions", () => {
+  it("getCutById should return correct cut", () => {
+    const ribeye = getCutById("ribeye");
+    expect(ribeye).toBeDefined();
+    expect(ribeye!.name).toBe("Ribeye");
+    expect(ribeye!.category).toBe("beef");
+  });
+
+  it("getCutById should return undefined for unknown ID", () => {
+    const result = getCutById("nonexistent-cut");
+    expect(result).toBeUndefined();
+  });
+
+  it("getCutsByCategory should filter correctly", () => {
+    const beefCuts = getCutsByCategory("beef");
+    expect(beefCuts.length).toBeGreaterThan(0);
+    for (const cut of beefCuts) {
+      expect(cut.category).toBe("beef");
+    }
+  });
+
+  it("getCutsByCategory should return empty for unknown category", () => {
+    const result = getCutsByCategory("alien_meat");
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe("Cut Catalog Search", () => {
+  it("should find cuts by name", () => {
+    const results = searchCuts("ribeye");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((c) => c.id === "ribeye")).toBe(true);
+  });
+
+  it("should find cuts by alias", () => {
+    const results = searchCuts("cowboy steak");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some((c) => c.id === "ribeye")).toBe(true);
+  });
+
+  it("should filter by category when provided", () => {
+    const results = searchCuts("ribs", "pork");
+    expect(results.length).toBeGreaterThan(0);
+    for (const cut of results) {
+      expect(cut.category).toBe("pork");
+    }
+  });
+
+  it("should return all cuts for empty query", () => {
+    const results = searchCuts("");
+    expect(results.length).toBe(ALL_CUTS.length);
+  });
+
+  it("should return category cuts for empty query with category", () => {
+    const results = searchCuts("", "beef");
+    const beefCuts = getCutsByCategory("beef");
+    expect(results.length).toBe(beefCuts.length);
+  });
+});
+
+describe("Cook Time Estimation", () => {
+  it("should estimate time for a basic cut", () => {
+    const ribeye = getCutById("ribeye")!;
+    const est = estimateCookTime(ribeye);
+    expect(est.minMinutes).toBeGreaterThan(0);
+    expect(est.maxMinutes).toBeGreaterThan(est.minMinutes);
+    expect(est.label).toBeTruthy();
+  });
+
+  it("should adjust time for weight-based cuts", () => {
+    const brisket = getCutById("brisket_whole")!;
+    const est10 = estimateCookTime(brisket, 10);
+    const est15 = estimateCookTime(brisket, 15);
+    expect(est15.minMinutes).toBeGreaterThan(est10.minMinutes);
+  });
+
+  it("should adjust time for thickness", () => {
+    const ribeye = getCutById("ribeye")!;
+    const thin = estimateCookTime(ribeye, undefined, "thin");
+    const thick = estimateCookTime(ribeye, undefined, "extra_thick");
+    expect(thick.minMinutes).toBeGreaterThan(thin.minMinutes);
+  });
+});
+
+describe("Default Doneness", () => {
+  it("should return the default doneness for beef cuts", () => {
+    const ribeye = getCutById("ribeye")!;
+    const doneness = getDefaultDoneness(ribeye);
+    expect(doneness).toBeDefined();
+    expect(doneness.isDefault).toBe(true);
+    expect(doneness.id).toBe("medium_rare");
+  });
+
+  it("should return first doneness if no default is marked", () => {
+    // Create a mock cut with no default
+    const mockCut: CutDefinition = {
+      ...getCutById("ribeye")!,
+      doneness: [
+        { id: "test", label: "Test", pullTemp: 150, finalTemp: 155, description: "Test", isSafe: true },
+      ],
+    };
+    const doneness = getDefaultDoneness(mockCut);
+    expect(doneness.id).toBe("test");
+  });
+});
+
+describe("Build Cook Config", () => {
+  it("should build a valid config from a cut", () => {
+    const ribeye = getCutById("ribeye")!;
+    const config = buildCookConfig(ribeye);
+    expect(config.cutId).toBe("ribeye");
+    expect(config.cutName).toBe("Ribeye");
+    expect(config.category).toBe("beef");
+    expect(config.meatProfileId).toBeTruthy();
+    expect(config.method).toBe("reverse_sear");
+    expect(config.grillTemp).toBeGreaterThan(0);
+    expect(config.pullTemp).toBeGreaterThan(0);
+    expect(config.finalTemp).toBeGreaterThanOrEqual(config.pullTemp);
+    expect(config.estimatedTime).toBeTruthy();
+    expect(typeof config.hasStall).toBe("boolean");
+    expect(typeof config.wrapRecommended).toBe("boolean");
+    expect(typeof config.restMinutes).toBe("number");
+    expect(Array.isArray(config.tips)).toBe(true);
+  });
+
+  it("should apply doneness override", () => {
+    const ribeye = getCutById("ribeye")!;
+    const mediumRare = buildCookConfig(ribeye, "medium_rare");
+    const wellDone = buildCookConfig(ribeye, "well_done");
+    expect(wellDone.pullTemp).toBeGreaterThan(mediumRare.pullTemp);
+    expect(wellDone.donenessId).toBe("well_done");
+    expect(mediumRare.donenessId).toBe("medium_rare");
+  });
+
+  it("should apply grill temp override", () => {
+    const ribeye = getCutById("ribeye")!;
+    const config = buildCookConfig(ribeye, undefined, undefined, undefined, 300);
+    expect(config.grillTemp).toBe(300);
+  });
+
+  it("should apply method override", () => {
+    const ribeye = getCutById("ribeye")!;
+    const config = buildCookConfig(ribeye, undefined, undefined, undefined, undefined, "smoke");
+    expect(config.method).toBe("smoke");
+  });
+
+  it("should include thickness info when provided", () => {
+    const ribeye = getCutById("ribeye")!;
+    const config = buildCookConfig(ribeye, undefined, "thick");
+    expect(config.thicknessId).toBe("thick");
+    expect(config.thicknessLabel).toBeTruthy();
+  });
+});
+
+// ===== Meat Profiles Tests =====
+
+describe("Meat Profiles", () => {
+  it("should have profiles for common meats", () => {
+    expect(MEAT_PROFILES.brisket).toBeDefined();
+    expect(MEAT_PROFILES.steak).toBeDefined();
+    expect(MEAT_PROFILES.pork_butt).toBeDefined();
+    expect(MEAT_PROFILES.whole_chicken).toBeDefined();
+    expect(MEAT_PROFILES.salmon).toBeDefined();
+  });
+
+  it("each profile should have valid markers", () => {
+    for (const [id, profile] of Object.entries(MEAT_PROFILES)) {
+      expect(profile.name).toBeTruthy();
+      expect(profile.id).toBe(id);
+      expect(profile.markers.length).toBeGreaterThan(0);
+      for (const marker of profile.markers) {
+        expect(marker.label).toBeTruthy();
+        expect(marker.temp).toBeGreaterThan(0);
+        expect(marker.color).toBeTruthy();
+      }
+    }
+  });
+
+  it("getMeatProfile should find by ID", () => {
+    const profile = getMeatProfile("brisket");
+    expect(profile).toBeDefined();
+    expect(profile!.name).toContain("Brisket");
+  });
+
+  it("getMeatProfile should return undefined for unknown ID", () => {
+    const profile = getMeatProfile("nonexistent");
+    expect(profile).toBeUndefined();
+  });
+});

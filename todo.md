@@ -160,3 +160,24 @@
 - [x] Add "Install App" prompt/button in DashboardLayout (notification banner)
 - [x] Configure PWA meta tags in index.html for iOS Add to Home Screen
 - [x] Service worker configured for background notification delivery
+
+## Enhanced Cook Guide — Drill-Down Selectors & Dynamic Parameters
+- [x] Expand meat science data with comprehensive sub-cuts per category (e.g., Beef → Ribeye, NY Strip, Skirt, Flank, Brisket Flat/Point, etc.)
+- [x] Add fish sub-types (Salmon, Steelhead, Trout, Cod, Halibut, Mahi-Mahi, etc.)
+- [x] Add thickness/weight modifiers that dynamically adjust estimated cook time and target temp
+- [x] Add doneness levels per cut (Rare, Medium-Rare, Medium, Medium-Well, Well-Done) with correct target temps
+- [x] Build searchable/typeable single-select combobox component for cut selection
+- [x] Build Cook Guide drill-down UI: Category → Cut → Parameters (thickness, weight, doneness)
+- [x] Allow full user override of all auto-calculated values (temps, times, alerts)
+- [x] Wire Cook Guide selection to Live Cook page — pre-load config without auto-starting
+- [x] Live Cook "Start" button required to begin session (no auto-start on navigate)
+- [x] Add Dashboard quick meat-type selector for graph reference lines without starting a cook
+- [x] Update server routes to accept enhanced cook configuration with sub-cut details
+- [x] Write tests for enhanced cook template data and parameter calculations
+
+## Temperature Graph Timeline Navigation
+- [x] Add back/forward arrow buttons to shift time window through cook history
+- [x] Add "Jump to Now" button to snap back to latest data
+- [x] Add drag-to-pan on graph to slide through timeline
+- [x] Show current time window position indicator (e.g., "2:15 PM - 2:25 PM")
+- [x] Auto-follow mode: graph follows latest data until user manually navigates backward

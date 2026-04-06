@@ -1,6 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLiveCook, useLiveTelemetry, useTelemetryHistory, useNotifications, useTraegerStatus } from "@/hooks/useTraeger";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -10,17 +10,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import TemperatureGraph from "@/components/TemperatureGraph";
+import CookConfigurator, { type CookConfigResult } from "@/components/CookConfigurator";
 import { MEAT_PROFILES, getMeatProfile } from "../../../shared/meat-science";
+import { getCutById } from "../../../shared/cut-catalog";
 import { getSystemStatus } from "../../../shared/traeger-types";
 import {
   Flame, Timer, Thermometer, AlertTriangle, Bell, BellOff, BellRing,
   Play, Square, ChefHat, ArrowRight, Plus, Trash2, Clock, TrendingUp,
-  TrendingDown, Minus, BookOpen, Loader2, X,
+  TrendingDown, Minus, BookOpen, Loader2, X, Settings2,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
 import type { MeatProfile } from "../../../shared/meat-science";
 
@@ -180,26 +181,30 @@ function AlertList({
   );
 }
 
-// ===== No Active Cook =====
-function NoActiveCook() {
-  const [, navigate] = useLocation();
+// ===== No Active Cook — Idle State =====
+function IdleState({ onConfigure, onBrowse }: { onConfigure: () => void; onBrowse: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="p-6 rounded-full bg-card/50 border border-border/50">
         <ChefHat className="h-16 w-16 text-muted-foreground" />
       </div>
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold">No Active Cook</h2>
+        <h2 className="text-2xl font-bold">Ready to Cook</h2>
         <p className="text-muted-foreground max-w-md">
-          Start a cook from the Cook Guide to see live tracking, temperature graphs with meat science markers,
-          and smart alerts here.
+          Configure a new cook session with intelligent cut selection, doneness targets,
+          and smart alerts — or browse the Cook Guide for pre-built templates.
         </p>
       </div>
-      <Button size="lg" className="gap-2" onClick={() => navigate("/cook-guide")}>
-        <BookOpen className="h-5 w-5" />
-        Browse Cook Guide
-        <ArrowRight className="h-4 w-4" />
-      </Button>
+      <div className="flex gap-3">
+        <Button size="lg" className="gap-2" onClick={onConfigure}>
+          <Settings2 className="h-5 w-5" />
+          Configure Cook
+        </Button>
+        <Button size="lg" variant="outline" className="gap-2" onClick={onBrowse}>
+          <BookOpen className="h-5 w-5" />
+          Cook Guide
+        </Button>
+      </div>
     </div>
   );
 }
@@ -207,11 +212,31 @@ function NoActiveCook() {
 // ===== Main Live Cook Page =====
 export default function LiveCook() {
   const { user } = useAuth();
-  const { activeCook, isLoading, dismissAlert: dismissAlertMutation, addAlert: addAlertMutation, removeAlert: removeAlertMutation, endCook, cancelCook } = useLiveCook();
+  const { activeCook, isLoading, startCook, dismissAlert: dismissAlertMutation, addAlert: addAlertMutation, removeAlert: removeAlertMutation, endCook, cancelCook } = useLiveCook();
   const telemetryQuery = useLiveTelemetry();
   const { chartData } = useTelemetryHistory();
   const notifications = useNotifications();
   const traegerStatus = useTraegerStatus();
+  const [, setLocation] = useLocation();
+  const searchString = useSearch();
+
+  // Parse query params for pre-selection from Cook Guide
+  const searchParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const initialCutId = searchParams.get("cutId") || undefined;
+  const initialCategory = searchParams.get("category") || undefined;
+  const fromTemplate = searchParams.get("template") || undefined;
+
+  // Three states: "idle" | "configure" | "active"
+  const [pageState, setPageState] = useState<"idle" | "configure">(
+    initialCutId || initialCategory || fromTemplate ? "configure" : "idle"
+  );
+
+  // When query params change (navigating from Cook Guide), switch to configure
+  useEffect(() => {
+    if (initialCutId || initialCategory || fromTemplate) {
+      setPageState("configure");
+    }
+  }, [initialCutId, initialCategory, fromTemplate]);
 
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [showAddAlertDialog, setShowAddAlertDialog] = useState(false);
@@ -228,7 +253,6 @@ export default function LiveCook() {
   const meatProfile: MeatProfile | null = useMemo(() => {
     if (!activeCook?.session) return null;
     const session = activeCook.session;
-    // Try to find by meat type / cut name
     const profile = getMeatProfile(undefined, session.meatType ?? undefined, session.cutName ?? undefined);
     return profile ?? null;
   }, [activeCook?.session]);
@@ -256,7 +280,7 @@ export default function LiveCook() {
     }
   }, [activeCook?.firedAlerts]);
 
-  // Process missed alerts (fired while browser was closed)
+  // Process missed alerts
   useEffect(() => {
     if (!activeCook?.missedAlerts || activeCook.missedAlerts.length === 0) return;
     for (const alert of activeCook.missedAlerts) {
@@ -302,6 +326,67 @@ export default function LiveCook() {
     );
   };
 
+  // Handle starting a cook from the configurator
+  const handleStartFromConfig = (result: CookConfigResult) => {
+    const grillId = traegerStatus.data?.selectedGrillId;
+    if (!grillId) {
+      toast.error("No grill selected", { description: "Go to Settings to connect your grill." });
+      return;
+    }
+
+    const { config, enableNotifications: notif, enableAlarms: alarms } = result;
+
+    // Build stages from the cut catalog config
+    const stages = [];
+
+    // Main cook stage
+    stages.push({
+      name: `${config.method === "reverse_sear" ? "Smoke" : config.method === "smoke" ? "Smoke" : "Cook"} — ${config.cutName}`,
+      grillTemp: config.grillTemp,
+      triggerType: "probe_temp" as const,
+      triggerValue: config.pullTemp,
+      superSmoke: config.method === "smoke" && config.grillTemp <= 225,
+      alertMessage: `${config.cutName} has reached ${config.pullTemp}°F — time to pull!`,
+    });
+
+    // Reverse sear: add sear stage
+    if (config.method === "reverse_sear") {
+      stages.push({
+        name: "Sear",
+        grillTemp: 450,
+        triggerType: "time" as const,
+        triggerValue: 180, // 3 minutes
+        superSmoke: false,
+        alertMessage: "Flip and sear the other side!",
+      });
+    }
+
+    startCook.mutate(
+      {
+        grillId,
+        meatType: config.category,
+        cutName: config.cutName,
+        method: config.method,
+        meatProfileId: config.meatProfileId,
+        stages,
+        enableNotifications: notif,
+        enableAlarms: alarms,
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Cook started: ${config.cutName}`, {
+            description: `${config.donenessLabel} — pull at ${config.pullTemp}°F`,
+          });
+          // Clear query params
+          setLocation("/live-cook", { replace: true });
+        },
+        onError: (err) => {
+          toast.error("Failed to start cook", { description: err.message });
+        },
+      }
+    );
+  };
+
   if (!user) return null;
   if (isLoading) {
     return (
@@ -311,262 +396,287 @@ export default function LiveCook() {
     );
   }
 
-  // No active cook → show redirect to Cook Guide
-  if (!activeCook) {
-    return <NoActiveCook />;
-  }
+  // ===== STATE: Active Cook =====
+  if (activeCook) {
+    const session = activeCook.session;
+    const mqttState = activeCook.mqttState;
+    const allAlerts = mqttState?.alerts || [];
 
-  const session = activeCook.session;
-  const mqttState = activeCook.mqttState;
-  const allAlerts = mqttState?.alerts || [];
+    return (
+      <div className="space-y-4">
+        {/* Alarm banners */}
+        <AlarmBanner
+          alarms={notifications.activeAlarms}
+          onDismiss={(id) => {
+            notifications.dismissAlarm(id);
+            dismissAlertMutation.mutate({ alertId: id });
+          }}
+        />
 
-  return (
-    <div className="space-y-4">
-      {/* Alarm banners */}
-      <AlarmBanner
-        alarms={notifications.activeAlarms}
-        onDismiss={(id) => {
-          notifications.dismissAlarm(id);
-          dismissAlertMutation.mutate({ alertId: id });
-        }}
-      />
-
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Flame className="h-6 w-6 text-amber-400" />
-            Live Cook
-          </h1>
-          <p className="text-sm text-muted-foreground font-mono">
-            {session?.meatType && session?.cutName
-              ? `${session.meatType} — ${session.cutName}`
-              : session?.method || "Active Cook Session"}
-            {session?.templateId && <span className="ml-2 text-amber-400/60">({session.templateId})</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Notification toggles */}
-          <div className="flex items-center gap-3 mr-4">
-            <div className="flex items-center gap-1.5">
-              <Switch
-                checked={notifications.notificationsEnabled}
-                onCheckedChange={notifications.setNotificationsEnabled}
-                className="scale-75"
-              />
-              <Label className="text-xs font-mono cursor-pointer">
-                <Bell className="h-3 w-3 inline mr-1" />
-                Notify
-              </Label>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Switch
-                checked={notifications.alarmsEnabled}
-                onCheckedChange={notifications.setAlarmsEnabled}
-                className="scale-75"
-              />
-              <Label className="text-xs font-mono cursor-pointer">
-                <BellRing className="h-3 w-3 inline mr-1" />
-                Alarm
-              </Label>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" className="gap-1.5 font-mono" onClick={() => setShowEndDialog(true)}>
-            <Square className="h-3.5 w-3.5" />
-            End Cook
-          </Button>
-        </div>
-      </div>
-
-      {/* Cook Summary Stats */}
-      <CookSummary session={session} mqttState={mqttState} telemetry={telemetry} />
-
-      {/* Stall Detector */}
-      <StallDetector stallInfo={activeCook.stallInfo} />
-
-      {/* Temperature Graph */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-mono flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-amber-400" />
-            Temperature History
-            {meatProfile && (
-              <Badge variant="outline" className="ml-2 text-[10px] font-mono border-amber-500/30 text-amber-400">
-                {meatProfile.name} markers
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TemperatureGraph
-            data={chartData}
-            meatProfile={meatProfile}
-            cookStartTime={cookStartTime}
-            height={300}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Alerts Panel */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-mono flex items-center gap-2">
-              <Bell className="h-4 w-4 text-amber-400" />
-              Alerts & Alarms
-              <Badge variant="outline" className="text-[10px]">{allAlerts.length}</Badge>
-            </CardTitle>
-            <Button variant="outline" size="sm" className="h-7 text-xs font-mono gap-1" onClick={() => setShowAddAlertDialog(true)}>
-              <Plus className="h-3 w-3" />
-              Add Alert
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {allAlerts.length > 0 ? (
-            <AlertList
-              alerts={allAlerts}
-              onDismiss={(id) => {
-                notifications.dismissAlarm(id);
-                dismissAlertMutation.mutate({ alertId: id });
-              }}
-              onRemove={(id) => removeAlertMutation.mutate({ alertId: id })}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No alerts configured. Add custom alerts or start a cook from the Cook Guide to get meat science-based alerts.
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Flame className="h-6 w-6 text-amber-400" />
+              Live Cook
+            </h1>
+            <p className="text-sm text-muted-foreground font-mono">
+              {session?.meatType && session?.cutName
+                ? `${session.meatType} — ${session.cutName}`
+                : session?.method || "Active Cook Session"}
+              {session?.templateId && <span className="ml-2 text-amber-400/60">({session.templateId})</span>}
             </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Notification Permission Warning */}
-      {notifications.permission !== "granted" && (
-        <Card className="border-amber-500/30">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-400" />
-              <div>
-                <p className="text-sm font-medium">Browser notifications are not enabled</p>
-                <p className="text-xs text-muted-foreground">Enable to receive alerts when temperatures are reached.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Notification toggles */}
+            <div className="flex items-center gap-3 mr-4">
+              <div className="flex items-center gap-1.5">
+                <Switch
+                  checked={notifications.notificationsEnabled}
+                  onCheckedChange={notifications.setNotificationsEnabled}
+                  className="scale-75"
+                />
+                <Label className="text-xs font-mono cursor-pointer">
+                  <Bell className="h-3 w-3 inline mr-1" />
+                  Notify
+                </Label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Switch
+                  checked={notifications.alarmsEnabled}
+                  onCheckedChange={notifications.setAlarmsEnabled}
+                  className="scale-75"
+                />
+                <Label className="text-xs font-mono cursor-pointer">
+                  <BellRing className="h-3 w-3 inline mr-1" />
+                  Alarm
+                </Label>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={notifications.requestPermission}>
-              Enable
+            <Button variant="outline" size="sm" className="gap-1.5 font-mono" onClick={() => setShowEndDialog(true)}>
+              <Square className="h-3.5 w-3.5" />
+              End Cook
             </Button>
+          </div>
+        </div>
+
+        {/* Cook Summary Stats */}
+        <CookSummary session={session} mqttState={mqttState} telemetry={telemetry} />
+
+        {/* Stall Detector */}
+        <StallDetector stallInfo={activeCook.stallInfo} />
+
+        {/* Temperature Graph */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-mono flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-amber-400" />
+              Temperature History
+              {meatProfile && (
+                <Badge variant="outline" className="ml-2 text-[10px] font-mono border-amber-500/30 text-amber-400">
+                  {meatProfile.name} markers
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TemperatureGraph
+              data={chartData}
+              meatProfile={meatProfile}
+              cookStartTime={cookStartTime}
+              height={300}
+            />
           </CardContent>
         </Card>
-      )}
 
-      {/* End Cook Dialog */}
-      <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>End Cook Session</DialogTitle>
-            <DialogDescription>Save notes and rate this cook for your history.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm font-mono">Rating</Label>
-              <div className="flex gap-1 mt-1">
-                {[1, 2, 3, 4, 5].map((r) => (
-                  <Button
-                    key={r}
-                    variant={endRating >= r ? "default" : "outline"}
-                    size="sm"
-                    className="w-8 h-8 p-0"
-                    onClick={() => setEndRating(r)}
-                  >
-                    {r}
-                  </Button>
-                ))}
-              </div>
+        {/* Alerts Panel */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-mono flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-400" />
+                Alerts & Alarms
+                <Badge variant="outline" className="text-[10px]">{allAlerts.length}</Badge>
+              </CardTitle>
+              <Button variant="outline" size="sm" className="h-7 text-xs font-mono gap-1" onClick={() => setShowAddAlertDialog(true)}>
+                <Plus className="h-3 w-3" />
+                Add Alert
+              </Button>
             </div>
-            <div>
-              <Label className="text-sm font-mono">Notes</Label>
-              <Textarea
-                value={endNotes}
-                onChange={(e) => setEndNotes(e.target.value)}
-                placeholder="How did it turn out? Any adjustments for next time?"
-                rows={3}
+          </CardHeader>
+          <CardContent>
+            {allAlerts.length > 0 ? (
+              <AlertList
+                alerts={allAlerts}
+                onDismiss={(id) => {
+                  notifications.dismissAlarm(id);
+                  dismissAlertMutation.mutate({ alertId: id });
+                }}
+                onRemove={(id) => removeAlertMutation.mutate({ alertId: id })}
               />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEndDialog(false)}>Cancel</Button>
-            <Button onClick={handleEndCook} disabled={endCook.isPending}>
-              {endCook.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save & End
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Alert Dialog */}
-      <Dialog open={showAddAlertDialog} onOpenChange={setShowAddAlertDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Custom Alert</DialogTitle>
-            <DialogDescription>Set a temperature-based notification or alarm.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-sm font-mono">Label</Label>
-              <Input value={newAlertLabel} onChange={(e) => setNewAlertLabel(e.target.value)} placeholder="e.g., Wrap point" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-mono">Temperature (°F)</Label>
-                <Input type="number" value={newAlertTemp} onChange={(e) => setNewAlertTemp(Number(e.target.value))} min={50} max={500} />
-              </div>
-              <div>
-                <Label className="text-sm font-mono">Trigger On</Label>
-                <Select value={newAlertTrigger} onValueChange={(v) => setNewAlertTrigger(v as "probe" | "grill")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="probe">Probe Temp</SelectItem>
-                    <SelectItem value="grill">Grill Temp</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label className="text-sm font-mono">Alert Type</Label>
-              <div className="flex gap-3 mt-1.5">
-                <Button
-                  variant={newAlertType === "notification" ? "default" : "outline"}
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setNewAlertType("notification")}
-                >
-                  <Bell className="h-3.5 w-3.5" />
-                  Notification (ping once)
-                </Button>
-                <Button
-                  variant={newAlertType === "alarm" ? "default" : "outline"}
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setNewAlertType("alarm")}
-                >
-                  <BellRing className="h-3.5 w-3.5" />
-                  Alarm (persistent)
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {newAlertType === "notification"
-                  ? "Sends a one-time browser notification that auto-dismisses."
-                  : "Keeps alerting every 15 seconds until you manually dismiss it."}
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No alerts configured. Add custom alerts to get notified at specific temperatures.
               </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Notification Permission Warning */}
+        {notifications.permission !== "granted" && (
+          <Card className="border-amber-500/30">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-400" />
+                <div>
+                  <p className="text-sm font-medium">Browser notifications are not enabled</p>
+                  <p className="text-xs text-muted-foreground">Enable to receive alerts when temperatures are reached.</p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={notifications.requestPermission}>
+                Enable
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* End Cook Dialog */}
+        <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>End Cook Session</DialogTitle>
+              <DialogDescription>Save notes and rate this cook for your history.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-mono">Rating</Label>
+                <div className="flex gap-1 mt-1">
+                  {[1, 2, 3, 4, 5].map((r) => (
+                    <Button
+                      key={r}
+                      variant={endRating >= r ? "default" : "outline"}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                      onClick={() => setEndRating(r)}
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-mono">Notes</Label>
+                <Textarea
+                  value={endNotes}
+                  onChange={(e) => setEndNotes(e.target.value)}
+                  placeholder="How did it turn out? Any adjustments for next time?"
+                  rows={3}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddAlertDialog(false)}>Cancel</Button>
-            <Button onClick={handleAddAlert} disabled={!newAlertLabel.trim() || addAlertMutation.isPending}>
-              Add Alert
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEndDialog(false)}>Cancel</Button>
+              <Button onClick={handleEndCook} disabled={endCook.isPending}>
+                {endCook.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save & End
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Alert Dialog */}
+        <Dialog open={showAddAlertDialog} onOpenChange={setShowAddAlertDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Custom Alert</DialogTitle>
+              <DialogDescription>Set a temperature-based notification or alarm.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-sm font-mono">Label</Label>
+                <Input value={newAlertLabel} onChange={(e) => setNewAlertLabel(e.target.value)} placeholder="e.g., Wrap point" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm font-mono">Temperature (°F)</Label>
+                  <Input type="number" value={newAlertTemp} onChange={(e) => setNewAlertTemp(Number(e.target.value))} min={50} max={500} />
+                </div>
+                <div>
+                  <Label className="text-sm font-mono">Trigger On</Label>
+                  <Select value={newAlertTrigger} onValueChange={(v) => setNewAlertTrigger(v as "probe" | "grill")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="probe">Probe Temp</SelectItem>
+                      <SelectItem value="grill">Grill Temp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-sm font-mono">Alert Type</Label>
+                <div className="flex gap-3 mt-1.5">
+                  <Button
+                    variant={newAlertType === "notification" ? "default" : "outline"}
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setNewAlertType("notification")}
+                  >
+                    <Bell className="h-3.5 w-3.5" />
+                    Notification
+                  </Button>
+                  <Button
+                    variant={newAlertType === "alarm" ? "default" : "outline"}
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setNewAlertType("alarm")}
+                  >
+                    <BellRing className="h-3.5 w-3.5" />
+                    Alarm
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newAlertType === "notification"
+                    ? "Sends a one-time browser notification."
+                    : "Keeps alerting every 15 seconds until dismissed."}
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddAlertDialog(false)}>Cancel</Button>
+              <Button onClick={handleAddAlert} disabled={!newAlertLabel.trim() || addAlertMutation.isPending}>
+                Add Alert
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ===== STATE: Configure (pre-start) =====
+  if (pageState === "configure") {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <CookConfigurator
+          initialCutId={initialCutId}
+          initialCategory={initialCategory}
+          onStartCook={handleStartFromConfig}
+          onCancel={() => {
+            setPageState("idle");
+            setLocation("/live-cook", { replace: true });
+          }}
+          isStarting={startCook.isPending}
+          grillConnected={!!traegerStatus.data?.connected && !!traegerStatus.data?.selectedGrillId}
+        />
+      </div>
+    );
+  }
+
+  // ===== STATE: Idle =====
+  return (
+    <IdleState
+      onConfigure={() => setPageState("configure")}
+      onBrowse={() => setLocation("/cook-guide")}
+    />
   );
 }

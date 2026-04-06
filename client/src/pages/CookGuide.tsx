@@ -53,6 +53,7 @@ import {
   Bell,
   BellRing,
   AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
@@ -60,6 +61,7 @@ import { CATEGORIES, COOKING_METHODS } from "@shared/cook-templates";
 import type { CookTemplate, CookStage } from "@shared/traeger-types";
 import { useLiveCook, useTraegerStatus } from "@/hooks/useTraeger";
 import { toast } from "sonner";
+import { searchCuts, getCutsByCategory, type CutDefinition } from "../../../shared/cut-catalog";
 
 // ===== Shared Components =====
 
@@ -482,17 +484,6 @@ export default function CookGuide() {
   const [selectedCustom, setSelectedCustom] = useState<CustomTemplateRow | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
-  // Start Cook dialog state
-  const [startCookDialog, setStartCookDialog] = useState<{
-    open: boolean;
-    templateName: string;
-    meatType?: string;
-    cutName?: string;
-    method?: string;
-    stages?: CookStage[];
-    meatProfileId?: string;
-    templateId?: string;
-  }>({ open: false, templateName: "" });
 
   // Queries
   const { data: templates } = trpc.templates.list.useQuery();
@@ -607,53 +598,29 @@ export default function CookGuide() {
     return profileMap[category];
   };
 
-  // Start cook from a built-in template
+  // Navigate to Live Cook with category pre-selected (from built-in template)
   const handleStartBuiltIn = (template: CookTemplate) => {
-    if (!traegerStatus?.connected || !traegerStatus?.selectedGrillId) {
-      toast.error("Connect your Traeger account first", { description: "Go to Settings to connect your grill." });
-      return;
-    }
-    setStartCookDialog({
-      open: true,
-      templateName: template.name,
-      meatType: template.category,
-      cutName: template.cut,
-      method: template.method,
-      stages: template.stages,
-      meatProfileId: getMeatProfileId(template.category, template.cut),
-      templateId: template.id,
-    });
+    // Try to find a matching cut in the cut catalog
+    const cutMatches = searchCuts(template.cut, template.category);
+    const cutId = cutMatches.length > 0 ? cutMatches[0].id : undefined;
+    const params = new URLSearchParams();
+    params.set("category", template.category);
+    if (cutId) params.set("cutId", cutId);
+    params.set("template", template.id);
+    setLocation(`/live-cook?${params.toString()}`);
   };
 
-  // Start cook from a custom template
+  // Navigate to Live Cook with category pre-selected (from custom template)
   const handleStartCustom = (template: CustomTemplateRow) => {
-    if (!traegerStatus?.connected || !traegerStatus?.selectedGrillId) {
-      toast.error("Connect your Traeger account first", { description: "Go to Settings to connect your grill." });
-      return;
-    }
-    const stages = JSON.parse(String(template.stagesJson || "[]")) as CookStage[];
-    setStartCookDialog({
-      open: true,
-      templateName: template.name,
-      meatType: template.category,
-      cutName: template.meatCut || undefined,
-      method: template.method,
-      stages,
-      meatProfileId: getMeatProfileId(template.category, template.meatCut || undefined),
-      templateId: `custom-${template.id}`,
-    });
+    const cutMatches = template.meatCut ? searchCuts(template.meatCut, template.category) : [];
+    const cutId = cutMatches.length > 0 ? cutMatches[0].id : undefined;
+    const params = new URLSearchParams();
+    params.set("category", template.category);
+    if (cutId) params.set("cutId", cutId);
+    params.set("template", `custom-${template.id}`);
+    setLocation(`/live-cook?${params.toString()}`);
   };
 
-  const grillId = traegerStatus?.selectedGrillId || "";
-
-  // Calculate active cook duration
-  const activeCookDuration = activeCook?.session?.createdAt
-    ? Date.now() - new Date(activeCook.session.createdAt).getTime()
-    : undefined;
-
-  const activeCookName = activeCook?.session
-    ? `${activeCook.session.meatType || "Cook"}${activeCook.session.cutName ? ` - ${activeCook.session.cutName}` : ""}`
-    : undefined;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -798,8 +765,8 @@ export default function CookGuide() {
                       handleStartBuiltIn(selectedTemplate);
                     }}
                   >
-                    <Play className="h-3.5 w-3.5 mr-1.5" />
-                    start this cook
+                    <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+                    configure & cook
                   </Button>
                   <Button variant="outline" onClick={() => setSelectedTemplate(null)} className="font-mono text-xs">
                     close
@@ -866,8 +833,8 @@ export default function CookGuide() {
                         handleStartCustom(selectedCustom);
                       }}
                     >
-                      <Play className="h-3.5 w-3.5 mr-1.5" />
-                      start this cook
+                      <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+                      configure & cook
                     </Button>
                     {isAuthenticated && (
                       <>
@@ -890,21 +857,6 @@ export default function CookGuide() {
         </DialogContent>
       </Dialog>
 
-      {/* Start Cook Confirmation Dialog */}
-      <StartCookDialog
-        open={startCookDialog.open}
-        onOpenChange={(open) => setStartCookDialog((prev) => ({ ...prev, open }))}
-        templateName={startCookDialog.templateName}
-        meatType={startCookDialog.meatType}
-        cutName={startCookDialog.cutName}
-        method={startCookDialog.method}
-        stages={startCookDialog.stages}
-        meatProfileId={startCookDialog.meatProfileId}
-        templateId={startCookDialog.templateId}
-        grillId={grillId}
-        activeCookName={activeCookName}
-        activeCookDuration={activeCookDuration}
-      />
 
       {/* Create Template Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

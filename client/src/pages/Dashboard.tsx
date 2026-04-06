@@ -20,8 +20,15 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { getSystemStatus } from "@shared/traeger-types";
-import { getMeatProfile } from "@shared/meat-science";
-import { useEffect, useState } from "react";
+import { getMeatProfile, MEAT_PROFILES } from "@shared/meat-science";
+import { useEffect, useState, useMemo } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -152,6 +159,9 @@ export default function Dashboard() {
   const commands = useGrillCommands();
   const { activeCook } = useLiveCook();
 
+  // Manual meat profile selector for reference lines (must be before early returns)
+  const [manualMeatProfileId, setManualMeatProfileId] = useState<string>("auto");
+
   if (statusLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -223,7 +233,7 @@ export default function Dashboard() {
   const timeSinceUpdate = lastUpdate > 0 ? Math.floor((Date.now() - lastUpdate) / 1000) : -1;
 
   // Derive meat profile from active cook for graph markers
-  const meatProfileId = activeCook?.session?.meatType
+  const autoMeatProfileId = activeCook?.session?.meatType
     ? (() => {
         const mt = activeCook.session.meatType?.toLowerCase() || "";
         const cut = activeCook.session.cutName?.toLowerCase() || "";
@@ -239,7 +249,8 @@ export default function Dashboard() {
       })()
     : undefined;
 
-  const meatProfile = meatProfileId ? getMeatProfile(meatProfileId) : null;
+  const effectiveMeatProfileId = manualMeatProfileId === "auto" ? autoMeatProfileId : (manualMeatProfileId === "none" ? undefined : manualMeatProfileId);
+  const meatProfile = effectiveMeatProfileId ? getMeatProfile(effectiveMeatProfileId) : null;
 
   const cookStartTime = activeCook?.session?.createdAt
     ? new Date(activeCook.session.createdAt).getTime()
@@ -392,10 +403,31 @@ export default function Dashboard() {
       {/* Temperature Graph — now using the advanced component */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            <Flame className="h-3.5 w-3.5 text-primary" />
-            Temperature History
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Flame className="h-3.5 w-3.5 text-primary" />
+              Temperature History
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-muted-foreground uppercase">Markers</span>
+              <Select value={manualMeatProfileId} onValueChange={setManualMeatProfileId}>
+                <SelectTrigger className="h-7 w-[140px] text-xs font-mono bg-secondary/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">
+                    {autoMeatProfileId ? `Auto (${autoMeatProfileId.replace(/_/g, " ")})` : "Auto"}
+                  </SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  {Object.entries(MEAT_PROFILES).map(([id, p]) => (
+                    <SelectItem key={id} value={id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {chartData.length > 1 ? (

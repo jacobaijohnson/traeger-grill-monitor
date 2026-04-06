@@ -17,7 +17,7 @@ export async function createCustomTemplate(data: InsertCustomTemplate) {
   return result;
 }
 
-export async function getUserCustomTemplates(userId: number) {
+export async function getUserCustomTemplates(userId: string) {
   return await withDbRetry(async (db) => {
     return db
       .select()
@@ -47,7 +47,7 @@ export async function getCustomTemplate(id: number) {
 
 export async function updateCustomTemplate(
   id: number,
-  userId: number,
+  userId: string,
   data: Partial<InsertCustomTemplate>
 ) {
   await withDbRetry(async (db) => {
@@ -58,7 +58,7 @@ export async function updateCustomTemplate(
   }, "updateCustomTemplate");
 }
 
-export async function deleteCustomTemplate(id: number, userId: number) {
+export async function deleteCustomTemplate(id: number, userId: string) {
   await withDbRetry(async (db) => {
     await db
       .delete(customTemplates)
@@ -66,7 +66,7 @@ export async function deleteCustomTemplate(id: number, userId: number) {
   }, "deleteCustomTemplate");
 }
 
-export async function forkCustomTemplate(id: number, userId: number, authorName: string | null) {
+export async function forkCustomTemplate(id: number, userId: string, authorName: string | null) {
   const result = await withDbRetry(async (db) => {
     const original = await getCustomTemplate(id);
     if (!original) throw new Error("Template not found");
@@ -111,7 +111,7 @@ export async function createAutomationProgram(data: InsertAutomationProgram) {
   return result;
 }
 
-export async function getUserAutomationPrograms(userId: number) {
+export async function getUserAutomationPrograms(userId: string) {
   return await withDbRetry(async (db) => {
     return db
       .select()
@@ -121,7 +121,7 @@ export async function getUserAutomationPrograms(userId: number) {
   }, "getUserAutomationPrograms") ?? [];
 }
 
-export async function getActiveAutomation(userId: number) {
+export async function getActiveAutomation(userId: string) {
   return await withDbRetry(async (db) => {
     const result = await db
       .select()
@@ -141,8 +141,70 @@ export async function updateAutomationState(id: number, currentStage: number, is
   }, "updateAutomationState");
 }
 
-export async function deleteAutomationProgram(id: number) {
+export async function deleteAutomationProgram(id: number, userId: string) {
   await withDbRetry(async (db) => {
-    await db.delete(automationPrograms).where(eq(automationPrograms.id, id));
+    await db.delete(automationPrograms).where(
+      and(eq(automationPrograms.id, id), eq(automationPrograms.userId, userId))
+    );
   }, "deleteAutomationProgram");
+}
+
+export async function getAutomationProgram(id: number) {
+  return await withDbRetry(async (db) => {
+    const result = await db.select().from(automationPrograms).where(eq(automationPrograms.id, id)).limit(1);
+    return result.length > 0 ? result[0] : undefined;
+  }, "getAutomationProgram");
+}
+
+export async function publishAutomationProgram(id: number, userId: string, publish: boolean) {
+  await withDbRetry(async (db) => {
+    await db
+      .update(automationPrograms)
+      .set({ isPublished: publish ? 1 : 0 })
+      .where(and(eq(automationPrograms.id, id), eq(automationPrograms.userId, userId)));
+  }, "publishAutomationProgram");
+}
+
+export async function getPublishedAutomationPrograms(limit = 50) {
+  return await withDbRetry(async (db) => {
+    return db
+      .select()
+      .from(automationPrograms)
+      .where(eq(automationPrograms.isPublished, 1))
+      .orderBy(desc(automationPrograms.forkCount), desc(automationPrograms.createdAt))
+      .limit(limit);
+  }, "getPublishedAutomationPrograms") ?? [];
+}
+
+export async function forkAutomationProgram(id: number, userId: string, authorName: string | null) {
+  const result = await withDbRetry(async (db) => {
+    const original = await getAutomationProgram(id);
+    if (!original) throw new Error("Program not found");
+
+    // Increment fork count on original
+    await db
+      .update(automationPrograms)
+      .set({ forkCount: sql`${automationPrograms.forkCount} + 1` })
+      .where(eq(automationPrograms.id, id));
+
+    // Create the fork
+    const insertResult = await db.insert(automationPrograms).values({
+      userId,
+      authorName,
+      name: `${original.name} (fork)`,
+      description: original.description,
+      category: original.category,
+      method: original.method,
+      difficulty: original.difficulty,
+      estimatedTime: original.estimatedTime,
+      programJson: original.programJson,
+      variableValuesJson: original.variableValuesJson,
+      isPublished: 0,
+      forkCount: 0,
+      forkedFromId: id,
+    });
+    return insertResult[0].insertId;
+  }, "forkAutomationProgram");
+  if (result === null) throw new Error("Database not available");
+  return result;
 }

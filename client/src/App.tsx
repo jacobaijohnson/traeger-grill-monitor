@@ -12,27 +12,40 @@ import LiveCook from "./pages/LiveCook";
 import History from "./pages/History";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
   return (
-    <DashboardLayout>
-      <Switch>
-        <Route path={"/"} component={Home} />
-        <Route path={"/dashboard"} component={Dashboard} />
-        <Route path={"/controls"} component={Controls} />
-        <Route path={"/cook-programs"} component={CookPrograms} />
-        {/* Redirect old routes to unified Cook Programs */}
-        <Route path={"/cook-guide"}>{() => <Redirect to="/cook-programs" />}</Route>
-        <Route path={"/automation"}>{() => <Redirect to="/cook-programs" />}</Route>
-        <Route path={"/live-cook"} component={LiveCook} />
-        <Route path={"/history"} component={History} />
-        <Route path={"/analytics"} component={Analytics} />
-        <Route path={"/settings"} component={Settings} />
-        <Route path={"/404"} component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </DashboardLayout>
+    <Switch>
+      {/* Public auth routes — outside DashboardLayout */}
+      <Route path={"/login"} component={Login} />
+      <Route path={"/register"} component={Register} />
+
+      {/* Authenticated dashboard routes */}
+      <Route>
+        {() => (
+          <DashboardLayout>
+            <Switch>
+              <Route path={"/"} component={Home} />
+              <Route path={"/dashboard"} component={Dashboard} />
+              <Route path={"/controls"} component={Controls} />
+              <Route path={"/cook-programs"} component={CookPrograms} />
+              {/* Redirect old routes to unified Cook Programs */}
+              <Route path={"/cook-guide"}>{() => <Redirect to="/cook-programs" />}</Route>
+              <Route path={"/automation"}>{() => <Redirect to="/cook-programs" />}</Route>
+              <Route path={"/live-cook"} component={LiveCook} />
+              <Route path={"/history"} component={History} />
+              <Route path={"/analytics"} component={Analytics} />
+              <Route path={"/settings"} component={Settings} />
+              <Route path={"/404"} component={NotFound} />
+              <Route component={NotFound} />
+            </Switch>
+          </DashboardLayout>
+        )}
+      </Route>
+    </Switch>
   );
 }
 

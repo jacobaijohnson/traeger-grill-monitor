@@ -1,4 +1,4 @@
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { z } from "zod";
 import {
   createAutomationProgram,
@@ -6,6 +6,10 @@ import {
   getActiveAutomation,
   updateAutomationState,
   deleteAutomationProgram,
+  getAutomationProgram,
+  publishAutomationProgram,
+  getPublishedAutomationPrograms,
+  forkAutomationProgram,
   createProgramExecution,
   updateExecutionOutcome,
   getActiveExecution,
@@ -329,8 +333,8 @@ export const automationRouter = router({
   // Delete a program
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
-      await deleteAutomationProgram(input.id);
+    .mutation(async ({ input, ctx }) => {
+      await deleteAutomationProgram(input.id, ctx.user.id);
       return { success: true };
     }),
 
@@ -373,6 +377,43 @@ export const automationRouter = router({
         startedAt: null,
         forkedFromId: input.sourceId,
       });
+      return { id };
+    }),
+
+  // Publish/unpublish a program to community
+  publish: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      publish: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await publishAutomationProgram(input.id, ctx.user.id, input.publish);
+      return { success: true };
+    }),
+
+  // List community (published) programs
+  community: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).optional() }).optional())
+    .query(async ({ input }) => {
+      return getPublishedAutomationPrograms(input?.limit ?? 50);
+    }),
+
+  // Get a single program by ID (for shareable links)
+  getById: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const program = await getAutomationProgram(input.id);
+      if (!program) throw new Error("Program not found");
+      // Only return if published or owned by requester
+      if (!program.isPublished) throw new Error("Program not found");
+      return program;
+    }),
+
+  // Fork a community program into your collection
+  forkCommunity: protectedProcedure
+    .input(z.object({ sourceId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const id = await forkAutomationProgram(input.sourceId, ctx.user.id, ctx.user.name ?? null);
       return { id };
     }),
 

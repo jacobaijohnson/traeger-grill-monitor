@@ -109,7 +109,6 @@ describe("DB Module Split", () => {
     // Core functions that must exist
     const requiredExports = [
       "getDb",
-      "upsertUser",
       // Traeger sessions
       "upsertTraegerSession",
       "getTraegerSession",

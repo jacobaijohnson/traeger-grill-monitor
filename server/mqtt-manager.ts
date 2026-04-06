@@ -52,11 +52,11 @@ interface MqttSession {
   activeCook: ActiveCookSession | null;
   firedAlerts: CookAlert[]; // alerts that fired (for missed alerts panel)
   dbPersistInterval: ReturnType<typeof setInterval> | null;
-  dbPersistCallback: ((userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
-  pelletPersistCallback: ((userId: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>) | null;
-  cookStatePersistCallback: ((userId: number, cook: ActiveCookSession) => Promise<void>) | null;
+  dbPersistCallback: ((userId: string, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>) | null;
+  pelletPersistCallback: ((userId: string, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>) | null;
+  cookStatePersistCallback: ((userId: string, cook: ActiveCookSession) => Promise<void>) | null;
   // Automation: callback to send grill commands from the automation engine
-  sendCommandCallback: ((userId: number, command: string) => Promise<void>) | null;
+  sendCommandCallback: ((userId: string, command: string) => Promise<void>) | null;
   // RC-4: Backpressure flag — skip persist if previous one is still in flight
   persistInFlight: boolean;
   pelletPersistInFlight: boolean;
@@ -65,7 +65,7 @@ interface MqttSession {
 }
 
 // In-memory store of active MQTT sessions keyed by userId
-const sessions = new Map<number, MqttSession>();
+const sessions = new Map<string, MqttSession>();
 
 const DEFAULT_TELEMETRY: TraegerTelemetry = {
   grill: 0,
@@ -223,7 +223,7 @@ function checkSingleTrigger(
   return false;
 }
 
-function evaluateAutomation(userId: number, session: MqttSession): void {
+function evaluateAutomation(userId: string, session: MqttSession): void {
   const cook = session.activeCook;
   if (!cook?.automationStages || cook.automationStages.length === 0) return;
 
@@ -409,7 +409,7 @@ function evaluateAutomation(userId: number, session: MqttSession): void {
 /**
  * Advance to the next automation phase.
  */
-function advanceAutomationPhase(userId: number, session: MqttSession): void {
+function advanceAutomationPhase(userId: string, session: MqttSession): void {
   const cook = session.activeCook;
   if (!cook?.automationStages) return;
 
@@ -464,7 +464,7 @@ function advanceAutomationPhase(userId: number, session: MqttSession): void {
 // ─── MQTT Connection ────────────────────────────────────
 
 export function connectMqtt(
-  userId: number,
+  userId: string,
   thingName: string,
   signedUrl: string,
   expiresAt: number
@@ -676,7 +676,7 @@ export function connectMqtt(
 
 // ─── Disconnect ─────────────────────────────────────────
 
-export function disconnectMqtt(userId: number): void {
+export function disconnectMqtt(userId: string): void {
   const session = sessions.get(userId);
   if (session) {
     // RC-3: Clear interval FIRST to prevent it firing during teardown
@@ -700,7 +700,7 @@ export function disconnectMqtt(userId: number): void {
 
 // ─── Telemetry Getters ──────────────────────────────────
 
-export function getTelemetry(userId: number): (TraegerTelemetry & { lastUpdate: number; mqttConnected: boolean }) | null {
+export function getTelemetry(userId: string): (TraegerTelemetry & { lastUpdate: number; mqttConnected: boolean }) | null {
   const session = sessions.get(userId);
   if (!session) return null;
   return {
@@ -710,7 +710,7 @@ export function getTelemetry(userId: number): (TraegerTelemetry & { lastUpdate: 
   };
 }
 
-export function getTelemetryHistory(userId: number, sinceMinutesAgo?: number): Array<TraegerTelemetry & { timestamp: number }> {
+export function getTelemetryHistory(userId: string, sinceMinutesAgo?: number): Array<TraegerTelemetry & { timestamp: number }> {
   const session = sessions.get(userId);
   if (!session) return [];
   if (!sinceMinutesAgo) return session.history;
@@ -718,23 +718,23 @@ export function getTelemetryHistory(userId: number, sinceMinutesAgo?: number): A
   return session.history.filter((h) => h.timestamp >= cutoff);
 }
 
-export function isMqttConnected(userId: number): boolean {
+export function isMqttConnected(userId: string): boolean {
   const session = sessions.get(userId);
   return session?.client?.connected || false;
 }
 
-export function needsUrlRefresh(userId: number): boolean {
+export function needsUrlRefresh(userId: string): boolean {
   const session = sessions.get(userId);
   if (!session) return false;
   return session.expiresAt < Date.now() + 300000;
 }
 
-export function refreshMqttUrl(userId: number, thingName: string, signedUrl: string, expiresAt: number): void {
+export function refreshMqttUrl(userId: string, thingName: string, signedUrl: string, expiresAt: number): void {
   disconnectMqtt(userId);
   connectMqtt(userId, thingName, signedUrl, expiresAt);
 }
 
-export function getActiveSessionUserIds(): number[] {
+export function getActiveSessionUserIds(): string[] {
   return Array.from(sessions.keys());
 }
 
@@ -744,7 +744,7 @@ export function getActiveSessionUserIds(): number[] {
  * Deduplicates against any points already in memory.
  */
 export function hydrateHistory(
-  userId: number,
+  userId: string,
   dbRecords: Array<{
     recordedAt: Date;
     grillTemp: number;
@@ -792,7 +792,7 @@ export function hydrateHistory(
 // ─── Cook Session Lifecycle ─────────────────────────────
 
 export function startCookSession(
-  userId: number,
+  userId: string,
   cookSessionId: number,
   opts: {
     templateId?: string;
@@ -824,7 +824,7 @@ export function startCookSession(
   console.log(`[COOK] User ${userId}: Started cook session ${cookSessionId}`);
 }
 
-export function endCookSession(userId: number): ActiveCookSession | null {
+export function endCookSession(userId: string): ActiveCookSession | null {
   const session = sessions.get(userId);
   if (!session?.activeCook) return null;
 
@@ -836,14 +836,14 @@ export function endCookSession(userId: number): ActiveCookSession | null {
   return ended;
 }
 
-export function getActiveCook(userId: number): ActiveCookSession | null {
+export function getActiveCook(userId: string): ActiveCookSession | null {
   const session = sessions.get(userId);
   return session?.activeCook || null;
 }
 
 // ─── Alert Management ───────────────────────────────────
 
-export function dismissAlert(userId: number, alertId: string): boolean {
+export function dismissAlert(userId: string, alertId: string): boolean {
   const session = sessions.get(userId);
   if (!session?.activeCook) return false;
 
@@ -855,7 +855,7 @@ export function dismissAlert(userId: number, alertId: string): boolean {
   return false;
 }
 
-export function getFiredAlerts(userId: number): CookAlert[] {
+export function getFiredAlerts(userId: string): CookAlert[] {
   const session = sessions.get(userId);
   if (!session) return [];
 
@@ -863,20 +863,20 @@ export function getFiredAlerts(userId: number): CookAlert[] {
   return activeFired;
 }
 
-export function getMissedAlerts(userId: number): CookAlert[] {
+export function getMissedAlerts(userId: string): CookAlert[] {
   const session = sessions.get(userId);
   if (!session) return [];
   return session.firedAlerts.filter((a) => a.status === "fired");
 }
 
-export function addAlert(userId: number, alert: CookAlert): boolean {
+export function addAlert(userId: string, alert: CookAlert): boolean {
   const session = sessions.get(userId);
   if (!session?.activeCook) return false;
   session.activeCook.alerts.push(alert);
   return true;
 }
 
-export function removeAlert(userId: number, alertId: string): boolean {
+export function removeAlert(userId: string, alertId: string): boolean {
   const session = sessions.get(userId);
   if (!session?.activeCook) return false;
   session.activeCook.alerts = session.activeCook.alerts.filter((a) => a.id !== alertId);
@@ -885,7 +885,7 @@ export function removeAlert(userId: number, alertId: string): boolean {
 
 // ─── Stall Info ─────────────────────────────────────────
 
-export function getStallInfo(userId: number): { detected: boolean; startedAt?: number; startTemp?: number; duration?: number } | null {
+export function getStallInfo(userId: string): { detected: boolean; startedAt?: number; startTemp?: number; duration?: number } | null {
   const session = sessions.get(userId);
   if (!session?.activeCook) return null;
   const cook = session.activeCook;
@@ -900,8 +900,8 @@ export function getStallInfo(userId: number): { detected: boolean; startedAt?: n
 // ─── DB Persistence Callback ────────────────────────────
 
 export function setDbPersistCallback(
-  userId: number,
-  callback: (userId: number, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>
+  userId: string,
+  callback: (userId: string, telemetry: TraegerTelemetry, cookSessionId?: number) => Promise<void>
 ): void {
   const session = sessions.get(userId);
   if (session) {
@@ -910,8 +910,8 @@ export function setDbPersistCallback(
 }
 
 export function setPelletPersistCallback(
-  userId: number,
-  callback: (userId: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>
+  userId: string,
+  callback: (userId: string, pelletLevel: number, grillTemp: number, cookSessionId?: number) => Promise<void>
 ): void {
   const session = sessions.get(userId);
   if (session) {
@@ -920,8 +920,8 @@ export function setPelletPersistCallback(
 }
 
 export function setCookStatePersistCallback(
-  userId: number,
-  callback: (userId: number, cook: ActiveCookSession) => Promise<void>
+  userId: string,
+  callback: (userId: string, cook: ActiveCookSession) => Promise<void>
 ): void {
   const session = sessions.get(userId);
   if (session) {
@@ -934,7 +934,7 @@ export function setCookStatePersistCallback(
  * Restores the in-memory cook session so monitoring continues.
  */
 export function hydrateCookState(
-  userId: number,
+  userId: string,
   cookState: {
     cookSessionId: number;
     templateId?: string | null;
@@ -981,7 +981,7 @@ export function hydrateCookState(
 
 // ─── Cook Stage Management ──────────────────────────────
 
-export function advanceCookStage(userId: number): number {
+export function advanceCookStage(userId: string): number {
   const session = sessions.get(userId);
   if (!session?.activeCook?.stages) return -1;
   if (session.activeCook.currentStage < session.activeCook.stages.length - 1) {
@@ -998,8 +998,8 @@ export function advanceCookStage(userId: number): number {
  * importing the Traeger API directly.
  */
 export function setSendCommandCallback(
-  userId: number,
-  callback: (userId: number, command: string) => Promise<void>
+  userId: string,
+  callback: (userId: string, command: string) => Promise<void>
 ): void {
   const session = sessions.get(userId);
   if (session) {
@@ -1013,7 +1013,7 @@ export function setSendCommandCallback(
  * The program's stages are stored in the cook session's automationStages.
  */
 export function loadAutomationProgram(
-  userId: number,
+  userId: string,
   automationId: number,
   stages: AutomationStage[],
   variableValues?: Record<string, string | number>
@@ -1069,7 +1069,7 @@ export function loadAutomationProgram(
  * This allows the automation to advance to the next phase
  * (if the current phase has requireAcknowledge=true).
  */
-export function acknowledgeAutomationPhase(userId: number): boolean {
+export function acknowledgeAutomationPhase(userId: string): boolean {
   const session = sessions.get(userId);
   if (!session?.activeCook?.automationStages) return false;
 
@@ -1095,7 +1095,7 @@ export function acknowledgeAutomationPhase(userId: number): boolean {
 /**
  * Manually advance the automation to the next phase (user override).
  */
-export function skipAutomationPhase(userId: number): boolean {
+export function skipAutomationPhase(userId: string): boolean {
   const session = sessions.get(userId);
   if (!session?.activeCook?.automationStages) return false;
 
@@ -1111,7 +1111,7 @@ export function skipAutomationPhase(userId: number): boolean {
 /**
  * Get the current automation state for a user (for API responses).
  */
-export function getAutomationState(userId: number): {
+export function getAutomationState(userId: string): {
   active: boolean;
   automationId?: number;
   phase: number;

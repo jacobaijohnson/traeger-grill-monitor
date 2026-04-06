@@ -4,7 +4,7 @@
  */
 
 // Connection & user helpers
-export { getDb, upsertUser, getUserByOpenId } from "./connection";
+export { getDb } from "./connection";
 
 // Traeger sessions
 export {
@@ -56,6 +56,10 @@ export {
   getActiveAutomation,
   updateAutomationState,
   deleteAutomationProgram,
+  getAutomationProgram,
+  publishAutomationProgram,
+  getPublishedAutomationPrograms,
+  forkAutomationProgram,
 } from "./templates";
 
 // Analytics
@@ -86,6 +90,33 @@ export {
   getExecutionsForProgram,
   getActiveExecution,
 } from "./executions";
+
+// Access control & settings
+export {
+  getSetting,
+  setSetting,
+  getAllSettings,
+  getRegistrationConfig,
+  setRegistrationConfig,
+  createInviteCode,
+  validateInviteCode,
+  consumeInviteCode,
+  listInviteCodes,
+  deleteInviteCode,
+  isEmailAllowed,
+  addToAllowlist,
+  removeFromAllowlist,
+  listAllowlist,
+  listAllUsers,
+  updateUserRole,
+  banUser,
+  unbanUser,
+  deleteUser,
+  getPendingUsers,
+  approveUser,
+  type RegistrationMode,
+  type RegistrationGate,
+} from "./access-control";
 
 // Pellet tracking
 export {

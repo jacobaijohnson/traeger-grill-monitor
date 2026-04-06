@@ -11,10 +11,10 @@
  *   analytics.ts    — Cook analytics aggregations
  *   helpers.ts      — Shared helpers (getValidIdToken, ensureMqttConnected)
  */
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
-import { COOKIE_NAME } from "@shared/const";
+import { auth } from "./_core/auth";
+import { fromNodeHeaders } from "better-auth/node";
 import {
   traegerRouter,
   grillRouter,
@@ -33,9 +33,16 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+    logout: publicProcedure.mutation(async ({ ctx }) => {
+      try {
+        // Use Better Auth's server-side sign-out to invalidate the session
+        await auth.api.signOut({
+          headers: fromNodeHeaders(ctx.req.headers),
+        });
+      } catch (error) {
+        // If sign-out fails (e.g., no session), still return success
+        console.warn("[Auth] Sign-out error (non-fatal):", error);
+      }
       return { success: true } as const;
     }),
   }),

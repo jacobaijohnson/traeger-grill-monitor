@@ -1,6 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { appRouter } from "./routers";
-import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 import { COOK_TEMPLATES, CATEGORIES, COOKING_METHODS } from "../shared/cook-templates";
 import { SYSTEM_STATUS, getSystemStatus, COMMANDS } from "../shared/traeger-types";
@@ -9,29 +8,24 @@ import { SYSTEM_STATUS, getSystemStatus, COMMANDS } from "../shared/traeger-type
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAuthContext(): { ctx: TrpcContext; clearedCookies: Array<{ name: string; options: Record<string, unknown> }> } {
-  const clearedCookies: Array<{ name: string; options: Record<string, unknown> }> = [];
+function createAuthContext(): { ctx: TrpcContext } {
   const user: AuthenticatedUser = {
-    id: 99999,
-    openId: "test-user-99999",
+    id: "test-user-99999",
     email: "test@example.com",
     name: "Test User",
-    loginMethod: "manus",
+    image: null,
     role: "user",
     createdAt: new Date(),
     updatedAt: new Date(),
-    lastSignedIn: new Date(),
   };
   const ctx: TrpcContext = {
     user,
     req: { protocol: "https", headers: {} } as TrpcContext["req"],
     res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
+      clearCookie: () => {},
+    } as unknown as TrpcContext["res"],
   };
-  return { ctx, clearedCookies };
+  return { ctx };
 }
 
 function createPublicContext(): TrpcContext {
@@ -201,20 +195,11 @@ describe("templates.get", () => {
 // ===== Auth Tests =====
 
 describe("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
+  it("returns success (Better Auth handles session invalidation)", async () => {
+    const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     const result = await caller.auth.logout();
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
   });
 });
 
@@ -224,7 +209,7 @@ describe("auth.me", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.auth.me();
     expect(result).not.toBeNull();
-    expect(result?.openId).toBe("test-user-99999");
+    expect(result?.id).toBe("test-user-99999");
     expect(result?.email).toBe("test@example.com");
   });
 

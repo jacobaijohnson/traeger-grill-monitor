@@ -27,6 +27,23 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+export const trustedProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.user || (ctx.user.role !== 'admin' && ctx.user.role !== 'trusted')) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "This action requires trusted or admin access." });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    });
+  }),
+);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

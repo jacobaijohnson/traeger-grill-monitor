@@ -15,7 +15,7 @@ export async function createProgramExecution(data: InsertProgramExecution) {
 }
 
 // Get execution history for a user (most recent first)
-export async function getUserExecutionHistory(userId: number, limit = 50) {
+export async function getUserExecutionHistory(userId: string, limit = 50) {
   return (
     (await withDbRetry(async (db) => {
       return db
@@ -68,7 +68,7 @@ export async function updateExecutionOutcome(
 // Update execution notes and rating (post-cook review)
 export async function updateExecutionReview(
   id: number,
-  userId: number,
+  userId: string,
   data: { notes?: string | null; rating?: number | null }
 ) {
   await withDbRetry(async (db) => {
@@ -116,7 +116,7 @@ export async function linkCookSession(id: number, cookSessionId: number) {
 }
 
 // Get execution history for a specific program
-export async function getExecutionsForProgram(automationProgramId: number, userId: number, limit = 20) {
+export async function getExecutionsForProgram(automationProgramId: number, userId: string, limit = 20) {
   return (
     (await withDbRetry(async (db) => {
       return db
@@ -135,7 +135,7 @@ export async function getExecutionsForProgram(automationProgramId: number, userI
 }
 
 // Get the currently running execution for a user (if any)
-export async function getActiveExecution(userId: number) {
+export async function getActiveExecution(userId: string) {
   return await withDbRetry(async (db) => {
     const result = await db
       .select()

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ─── Traeger Smoker Insight — LinuxServer.io Compatible ───
-# DSS Classification: DSS-1 (Public / Non-Sensitive)
+# Default port: 8420 (IANA unassigned, no homelab conflicts)
 
 # ─── Stage 1: Build client + server ──────────────────────
 FROM node:22-alpine AS builder
@@ -11,17 +11,24 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.4.1 --activate
 
 # Copy dependency manifests first for layer caching
-COPY package.json pnpm-lock.yaml .npmrc* ./
+COPY package.json pnpm-lock.yaml ./
 COPY patches/ patches/
 
 # Install all dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY . .
+COPY client/ client/
+COPY server/ server/
+COPY shared/ shared/
+COPY drizzle/ drizzle/
+COPY vite.config.ts tsconfig.json ./
 
 # Build client (Vite) and server (esbuild)
 RUN pnpm run build
+
+# Prune devDependencies for smaller production image
+RUN pnpm prune --prod
 
 # ─── Stage 2: Production (LSIO base) ─────────────────────
 FROM ghcr.io/linuxserver/baseimage-alpine:3.21
@@ -40,8 +47,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 ENV \
   NODE_ENV=production \
   HOME=/app \
-  # Default port — overridable at runtime
-  PORT=3000
+  PORT=8420
 
 # Install Node.js runtime (no build tools needed)
 RUN \
@@ -55,10 +61,10 @@ RUN \
   rm -rf /tmp/*
 
 # Copy built artifacts from builder stage
+# dist/index.js = bundled server, dist/public/ = Vite-built client
 COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/dist/client /app/dist/client
 
-# Copy production node_modules from builder
+# Copy production node_modules from builder (pruned)
 COPY --from=builder /app/node_modules /app/node_modules
 
 # Copy package.json for runtime reference
@@ -74,5 +80,5 @@ COPY --from=builder /app/shared /app/shared
 COPY root/ /
 
 # Ports and volumes (LSIO convention: /config for persistent data)
-EXPOSE 3000
+EXPOSE 8420
 VOLUME /config

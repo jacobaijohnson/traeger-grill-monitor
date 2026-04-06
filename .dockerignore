@@ -6,6 +6,7 @@ dist/
 
 # Development files
 .manus-logs/
+.webdev/
 .git/
 .gitignore
 
@@ -35,3 +36,6 @@ Dockerfile
 Dockerfile.*
 docker-compose*.yml
 .dockerignore
+
+# Config directory (runtime volume)
+config/

@@ -30,12 +30,12 @@ import { COMMANDS } from "@shared/traeger-types";
 
 // ─── RC-2 Fix: Per-user connection mutex ───────────────────
 // Prevents concurrent ensureMqttConnected calls from racing
-const connectionLocks = new Map<number, Promise<void>>();
+const connectionLocks = new Map<string, Promise<void>>();
 
 /**
  * Get a valid idToken for the user, refreshing if needed.
  */
-export async function getValidIdToken(userId: number): Promise<{ idToken: string; session: NonNullable<Awaited<ReturnType<typeof getTraegerSession>>> }> {
+export async function getValidIdToken(userId: string): Promise<{ idToken: string; session: NonNullable<Awaited<ReturnType<typeof getTraegerSession>>> }> {
   const session = await getTraegerSession(userId);
   if (!session) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No Traeger account linked. Please connect your Traeger account first." });
@@ -58,7 +58,7 @@ export async function getValidIdToken(userId: number): Promise<{ idToken: string
  * RC-2: Uses a per-user mutex so only one connection attempt runs at a time.
  * Subsequent callers wait for the first to finish rather than racing.
  */
-export async function ensureMqttConnected(userId: number) {
+export async function ensureMqttConnected(userId: string) {
   const { idToken, session } = await getValidIdToken(userId);
   if (!session.selectedGrillId) return { idToken, session };
 
@@ -101,14 +101,14 @@ export async function ensureMqttConnected(userId: number) {
         await persistTelemetryFromMqtt(uid, telemetry, sess.selectedGrillId, cookSessionId);
       });
       // Wire pellet persistence callback
-      setPelletPersistCallback(userId, async (uid: number, pelletLevel: number, grillTemp: number, cookSessionId?: number) => {
+      setPelletPersistCallback(userId, async (uid: string, pelletLevel: number, grillTemp: number, cookSessionId?: number) => {
         const sess = await getTraegerSession(uid);
         if (!sess?.selectedGrillId) return;
         const { persistPelletFromMqtt } = await import("../db/pellet");
         await persistPelletFromMqtt(uid, sess.selectedGrillId, pelletLevel, grillTemp, cookSessionId);
       });
       // Wire send command callback for automation engine
-      setSendCommandCallback(userId, async (uid: number, command: string) => {
+      setSendCommandCallback(userId, async (uid: string, command: string) => {
         try {
           const { idToken: freshToken } = await getValidIdToken(uid);
           const sess = await getTraegerSession(uid);

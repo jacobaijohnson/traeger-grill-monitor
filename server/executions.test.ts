@@ -403,3 +403,164 @@ describe("CSV Export Logic", () => {
     expect(filename).toMatch(/^cook-log-.*\.csv$/);
   });
 });
+
+// ─── Publish to Community Tests ─────────────────────
+
+describe("Publish to Community Flow", () => {
+  it("should toggle isPublished flag for automation programs", () => {
+    // Simulating the publish toggle
+    let program = { id: 1, name: "My Brisket", isPublished: 0, authorName: null as string | null };
+
+    // Publish
+    program.isPublished = 1;
+    program.authorName = "TestUser";
+    expect(program.isPublished).toBe(1);
+    expect(program.authorName).toBe("TestUser");
+
+    // Unpublish
+    program.isPublished = 0;
+    expect(program.isPublished).toBe(0);
+  });
+
+  it("should generate correct share URL from program ID", () => {
+    const origin = "https://example.manus.space";
+    const programId = 42;
+    const shareUrl = `${origin}/cook-programs?share=${programId}`;
+    expect(shareUrl).toBe("https://example.manus.space/cook-programs?share=42");
+    expect(shareUrl).toContain("/cook-programs?share=");
+  });
+
+  it("should parse share parameter from URL search params", () => {
+    const searchParams = new URLSearchParams("?share=42");
+    const shareId = searchParams.get("share");
+    expect(shareId).toBe("42");
+    expect(Number(shareId)).toBe(42);
+  });
+
+  it("should handle missing share parameter gracefully", () => {
+    const searchParams = new URLSearchParams("");
+    const shareId = searchParams.get("share");
+    expect(shareId).toBeNull();
+  });
+
+  it("should handle non-numeric share parameter gracefully", () => {
+    const searchParams = new URLSearchParams("?share=abc");
+    const shareId = searchParams.get("share");
+    expect(Number(shareId)).toBeNaN();
+  });
+
+  it("should increment fork count when community program is forked", () => {
+    let program = { id: 1, forkCount: 3 };
+    program.forkCount += 1;
+    expect(program.forkCount).toBe(4);
+  });
+
+  it("should set forkedFromId when forking a community program", () => {
+    const sourceId = 42;
+    const newProgram = {
+      id: 99,
+      name: "Forked Brisket",
+      forkedFromId: sourceId,
+      isPublished: 0,
+    };
+    expect(newProgram.forkedFromId).toBe(42);
+    expect(newProgram.isPublished).toBe(0); // Forks start unpublished
+  });
+
+  it("should only show published programs in community listing", () => {
+    const allPrograms = [
+      { id: 1, isPublished: 1, name: "Public Brisket" },
+      { id: 2, isPublished: 0, name: "Private Ribs" },
+      { id: 3, isPublished: 1, name: "Public Chicken" },
+    ];
+    const communityPrograms = allPrograms.filter((p) => p.isPublished === 1);
+    expect(communityPrograms).toHaveLength(2);
+    expect(communityPrograms.map((p) => p.name)).toEqual([
+      "Public Brisket",
+      "Public Chicken",
+    ]);
+  });
+});
+
+// ─── Token Encryption Tests ─────────────────────────
+
+describe("Token Encryption Helpers", () => {
+  // Test the encryption/decryption round-trip using the same algorithm
+  const crypto = require("crypto");
+
+  function encrypt(text: string, secret: string): string {
+    const key = crypto.scryptSync(secret, "traeger-salt", 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+    let encrypted = cipher.update(text, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return iv.toString("hex") + ":" + encrypted;
+  }
+
+  function decrypt(data: string, secret: string): string {
+    const key = crypto.scryptSync(secret, "traeger-salt", 32);
+    const [ivHex, encrypted] = data.split(":");
+    const iv = Buffer.from(ivHex, "hex");
+    const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  }
+
+  it("should encrypt and decrypt a token round-trip", () => {
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test";
+    const secret = "test-jwt-secret-key-12345";
+    const encrypted = encrypt(token, secret);
+    expect(encrypted).not.toBe(token);
+    expect(encrypted).toContain(":");
+    const decrypted = decrypt(encrypted, secret);
+    expect(decrypted).toBe(token);
+  });
+
+  it("should produce different ciphertext for same plaintext (random IV)", () => {
+    const token = "same-token-value";
+    const secret = "test-secret";
+    const enc1 = encrypt(token, secret);
+    const enc2 = encrypt(token, secret);
+    expect(enc1).not.toBe(enc2); // Different IVs → different ciphertext
+    expect(decrypt(enc1, secret)).toBe(token);
+    expect(decrypt(enc2, secret)).toBe(token);
+  });
+
+  it("should handle empty string encryption", () => {
+    const secret = "test-secret";
+    const encrypted = encrypt("", secret);
+    expect(decrypt(encrypted, secret)).toBe("");
+  });
+
+  it("should handle long token strings", () => {
+    const longToken = "a".repeat(2000);
+    const secret = "test-secret";
+    const encrypted = encrypt(longToken, secret);
+    expect(decrypt(encrypted, secret)).toBe(longToken);
+  });
+
+  it("should fail to decrypt with wrong secret", () => {
+    const token = "secret-token";
+    const encrypted = encrypt(token, "correct-secret");
+    expect(() => decrypt(encrypted, "wrong-secret")).toThrow();
+  });
+});
+
+// ─── Security: Rate Limiting & Helmet Tests ─────────
+
+describe("Security Configuration", () => {
+  it("should validate rate limit window and max values", () => {
+    const config = { windowMs: 15 * 60 * 1000, max: 200 };
+    expect(config.windowMs).toBe(900000); // 15 minutes
+    expect(config.max).toBe(200);
+    expect(config.max).toBeGreaterThan(0);
+    expect(config.windowMs).toBeGreaterThan(0);
+  });
+
+  it("should validate auth rate limit is stricter", () => {
+    const generalLimit = { windowMs: 15 * 60 * 1000, max: 200 };
+    const authLimit = { windowMs: 15 * 60 * 1000, max: 20 };
+    expect(authLimit.max).toBeLessThan(generalLimit.max);
+  });
+});

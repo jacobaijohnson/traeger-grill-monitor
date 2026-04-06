@@ -361,3 +361,120 @@
 - [x] Add download button to individual execution cards in History tab
 - [x] Include metadata header in CSV (program name, date, outcome, rating)
 - [x] Include execution log entries, step transitions, and peak temps in CSV rows
+
+## Code Quality Audit & Refactor
+- [ ] Extract shared utilities (formatDate, formatDuration, outcomeBadge) into shared module
+- [ ] Extract sub-components from CookPrograms.tsx into separate files (CompareDialog, ExecutionHistoryTab, ProgramBuilder, etc.)
+- [ ] Deduplicate formatDate/formatDurationMs definitions (currently defined 2x each)
+- [ ] Add React.memo to expensive pure components (ProgramCard, StepCard)
+- [ ] Add input validation/sanitization on server procedures
+- [ ] Review authorization checks on all execution/program endpoints
+
+## Publish to Community Flow
+- [ ] Add "Publish" button/action on My Programs cards
+- [ ] Create server procedure to publish a saved program to community (set isPublic flag or copy to community table)
+- [ ] Add confirmation dialog before publishing
+- [ ] Show published status on My Programs cards
+- [ ] Allow unpublishing from community
+
+## Shareable Program Links
+- [ ] Add unique shareId/slug to published community programs
+- [ ] Create /cook-programs/shared/:shareId route
+- [ ] Create server procedure to fetch program by shareId (public, no auth required)
+- [ ] Add "Copy Link" button on community program cards
+- [ ] Build shared program landing page with import/fork action
+
+## P0: Database Indexes
+- [ ] Add composite indexes on telemetry_data (userId, grillId, recordedAt)
+- [ ] Add indexes on automation_programs (userId, status), (userId, isActive)
+- [ ] Add indexes on cook_sessions (userId, grillId), (userId, startedAt)
+- [ ] Add indexes on program_executions (userId, automationProgramId), (userId, startedAt)
+- [ ] Add indexes on pellet_readings (userId, grillId, recordedAt)
+- [ ] Add indexes on session_alerts (userId, cookSessionId)
+
+## P0: Encrypt Traeger Tokens at Rest
+- [ ] Add AES-256-GCM encryption/decryption helpers
+- [ ] Encrypt tokens before DB write, decrypt on read
+- [ ] Migrate existing plaintext tokens to encrypted
+
+## P1: Security Hardening
+- [ ] Add helmet middleware for security headers
+- [ ] Add express-rate-limit on auth and mutation endpoints
+- [ ] Add .max() length constraints on string inputs in Zod schemas
+
+## P1: CookPrograms.tsx Decomposition
+- [ ] Extract shared utilities (formatDate, formatDuration, outcomeBadge) into cook-programs-utils.ts
+- [ ] Extract ExecutionHistoryTab into separate file
+- [ ] Extract CompareDialog into separate file
+- [ ] Extract ProgramBuilder + TriggerEditor + ActionEditor + VariableBuilder into separate file
+- [ ] Extract ProgramDetailDialog into separate file
+- [ ] Extract LiveExecution into separate file
+- [ ] Extract StepCard, TriggerDisplay, AlertBadge into shared components file
+
+## P2: Performance
+- [ ] Add React.lazy code splitting for heavy pages (CookPrograms, Analytics, Settings, History)
+- [ ] Add React.memo to ProgramCard, StepCard, and library grid items
+- [ ] Delete legacy CookGuide.tsx and Automation.tsx (routes redirect, code in git history)
+
+## Replace Manus OAuth with Better Auth
+- [x] Audit all current auth touchpoints (OAuth, context, useAuth, getLoginUrl, protected routes)
+- [x] Install better-auth package
+- [x] Create Better Auth server instance with Drizzle MySQL adapter and email/password enabled
+- [x] Generate and apply Better Auth schema tables (user, session, account, verification)
+- [x] Mount Better Auth handler on Express alongside tRPC
+- [x] Replace tRPC context to resolve user from Better Auth session instead of Manus OAuth JWT
+- [x] Build Login page (email + password form)
+- [x] Build Register page (email + password + name form)
+- [ ] Build Forgot Password page
+- [x] Replace useAuth hook to use Better Auth client instead of Manus OAuth
+- [x] Update DashboardLayout to use new auth flow
+- [x] Update all getLoginUrl references to point to new login page
+- [ ] Remove Manus OAuth dependencies (server/_core/oauth.ts, callback routes)
+- [x] Write tests for auth flows (register, login, logout, session, protected routes)
+- [x] Verify all existing features still work with new auth
+
+## Revised Auth: Private Server with Access Control Modes
+- [x] Fix all TS errors from userId int→string migration (db helpers, routers, sdk removal)
+- [x] Configure Better Auth for email/password only (no social login)
+- [x] Admin account auto-seed from ADMIN_EMAIL + ADMIN_PASSWORD env vars on first boot
+- [x] Add registration_mode setting: closed, invite, allowlist, approval, open
+- [x] Create invites table for invite-only mode
+- [x] Create allowlist table for allowlist mode
+- [ ] Create pending_registrations table for approval mode
+- [x] Build login page (email + password)
+- [x] Build register page (mode-aware: shows invite code field, allowlist notice, or approval notice)
+- [ ] Build admin user management in Settings (manage users, invites, allowlist, pending approvals)
+- [x] Update useAuth hook for Better Auth client
+- [x] Update DashboardLayout for new auth flow
+- [x] Update App.tsx routing (public auth pages outside DashboardLayout)
+- [ ] Remove Manus OAuth dependencies (sdk.ts, oauth.ts, ManusDialog.tsx)
+
+## Settings Panel & Role System
+- [x] Design role hierarchy: admin > trusted > user (3 tiers)
+- [ ] Admin: full system access, manage users/roles, invites, allowlist, registration mode, system config
+- [ ] Trusted: can create invites (limited count), view user list, manage own profile
+- [ ] User: can enter system, manage own profile, link Traeger account
+- [x] Build app_settings table for system config (registration_mode, active gates, etc.)
+- [x] Build invites table: code, createdBy, expiresAt, usedAt, usedBy (single-use + time-expiry, whichever first)
+- [x] Build allowlist table: email pattern, addedBy, addedAt
+- [x] Add role field to user: admin/trusted/user (default: user) — Better Auth admin plugin handles this
+- [x] Admin seeded from ADMIN_EMAIL + ADMIN_PASSWORD env vars on first boot
+- [x] Default registration: closed (no registration until admin opens it)
+- [x] Gates are OR logic: user passes if they satisfy at least ONE active gate
+- [ ] Settings gear icon in sidebar corner
+- [ ] Admin Settings sections: User Management, Registration & Access, Invites, Allowlist, System Config
+- [ ] User Settings sections: Profile, Traeger Account Link, Preferences, About/Legal
+- [ ] Trusted User: inherits User settings + can create invites (capped)
+
+## Docker Build Verification
+- [x] Review current Dockerfile and docker-compose.yml
+- [x] Ensure Dockerfile builds successfully
+- [x] Verify container starts and serves the app (verified structure, node bundle loads, s6 wiring correct)
+- [x] Test with ADMIN_EMAIL/ADMIN_PASSWORD env vars (seed-admin rewritten for direct DB)
+- [x] Document all required env vars for Docker deployment (ENV_TEMPLATE.md)
+
+## Port Selection & Docker Compose Review
+- [x] Research common self-hosted app ports to avoid conflicts
+- [x] Choose port 8420 (IANA unassigned, no homelab conflicts, BBQ/smoke vibe)
+- [x] Update all references (Dockerfile, docker-compose.yml, s6 scripts, ENV_TEMPLATE)
+- [x] Provide production-ready docker-compose.yml example for README/git

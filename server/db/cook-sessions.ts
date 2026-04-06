@@ -17,7 +17,7 @@ export async function createCookSession(data: InsertCookSession) {
   return result;
 }
 
-export async function endCookSession(id: number, userId?: number) {
+export async function endCookSession(id: number, userId?: string) {
   await withDbRetry(async (db) => {
     const conditions = userId
       ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
@@ -26,7 +26,7 @@ export async function endCookSession(id: number, userId?: number) {
   }, "endCookSession");
 }
 
-export async function updateCookSessionNotes(id: number, notes: string, rating?: number, userId?: number) {
+export async function updateCookSessionNotes(id: number, notes: string, rating?: number, userId?: string) {
   await withDbRetry(async (db) => {
     const updateData: Record<string, unknown> = { notes };
     if (rating !== undefined) updateData.rating = rating;
@@ -37,7 +37,7 @@ export async function updateCookSessionNotes(id: number, notes: string, rating?:
   }, "updateCookSessionNotes");
 }
 
-export async function getUserCookSessions(userId: number, limit = 50, grillId?: string) {
+export async function getUserCookSessions(userId: string, limit = 50, grillId?: string) {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -51,7 +51,7 @@ export async function getUserCookSessions(userId: number, limit = 50, grillId?: 
   }, "getUserCookSessions") ?? [];
 }
 
-export async function getCookSession(id: number, userId?: number) {
+export async function getCookSession(id: number, userId?: string) {
   return await withDbRetry(async (db) => {
     const conditions = userId
       ? and(eq(cookSessions.id, id), eq(cookSessions.userId, userId))
@@ -61,7 +61,7 @@ export async function getCookSession(id: number, userId?: number) {
   }, "getCookSession");
 }
 
-export async function getActiveCookSession(userId: number, grillId?: string) {
+export async function getActiveCookSession(userId: string, grillId?: string) {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId), eq(cookSessions.status, "active"))
@@ -114,7 +114,7 @@ export async function insertCookAlert(data: InsertCookAlert) {
   return result;
 }
 
-export async function getCookAlertsForSession(cookSessionId: number, userId?: number) {
+export async function getCookAlertsForSession(cookSessionId: number, userId?: string) {
   return await withDbRetry(async (db) => {
     const conditions = userId
       ? and(eq(cookAlerts.cookSessionId, cookSessionId), eq(cookAlerts.userId, userId))

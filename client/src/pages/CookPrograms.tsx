@@ -83,6 +83,8 @@ import {
   Columns,
   ArrowUp,
   Minus,
+  Globe,
+  Link2,
 } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect, Fragment, useId } from "react";
 import {
@@ -2698,6 +2700,9 @@ export default function CookPrograms() {
   });
   const { data: communityTemplates } = trpc.customTemplates.community.useQuery();
 
+  // Community automation programs (published by other users)
+  const { data: communityAutomationPrograms, refetch: refetchCommunityPrograms } = trpc.automation.community.useQuery();
+
   // Execution history
   const { data: executionHistory, refetch: refetchHistory } = trpc.executions.history.useQuery(
     { limit: 50 },
@@ -2721,6 +2726,42 @@ export default function CookPrograms() {
 
   // First-use hints
   const [showWelcomeHint, dismissWelcomeHint] = useFirstUseHint("cook_programs_welcome");
+
+  // Share link handler: ?share=<id> opens the shared program
+  const shareQuery = trpc.automation.getById.useQuery(
+    { id: Number(new URLSearchParams(window.location.search).get("share") || "0") },
+    {
+      enabled: !!new URLSearchParams(window.location.search).get("share"),
+      retry: false,
+    }
+  );
+  useEffect(() => {
+    if (shareQuery.data && !selectedItem) {
+      const prog = shareQuery.data;
+      const programData = prog.programJson as CookProgram | null;
+      setSelectedItem({
+        id: `shared-${prog.id}`,
+        source: "community",
+        program: programData || {
+          name: prog.name,
+          description: prog.description || "",
+          category: (prog.category || "other") as CookProgram["category"],
+          method: (prog.method || "smoke") as CookProgram["method"],
+          difficulty: (prog.difficulty || "intermediate") as CookProgram["difficulty"],
+          estimatedTime: prog.estimatedTime || undefined,
+          tags: [],
+          variables: [],
+          steps: [],
+          tips: [],
+        },
+        dbId: prog.id,
+        isPublished: true,
+        authorName: prog.authorName || undefined,
+        forkCount: prog.forkCount || 0,
+      });
+      setActiveTab("community");
+    }
+  }, [shareQuery.data]);
 
   // Mutations
   const createFromPreset = trpc.automation.createFromPreset.useMutation({
@@ -2761,6 +2802,21 @@ export default function CookPrograms() {
       refetchSaved();
       setShowBuilder(false);
       toast.success("Custom program created!");
+    },
+  });
+  const publishProgram = trpc.automation.publish.useMutation({
+    onSuccess: () => {
+      refetchSaved();
+      refetchCommunityPrograms();
+      setSelectedItem(null);
+      toast.success("Visibility updated!");
+    },
+  });
+  const forkCommunityProgram = trpc.automation.forkCommunity.useMutation({
+    onSuccess: () => {
+      refetchSaved();
+      refetchCommunityPrograms();
+      toast.success("Program forked to your collection!");
     },
   });
 
@@ -2843,15 +2899,46 @@ export default function CookPrograms() {
         },
         dbId: prog.id,
         isActive: prog.isActive as number,
+        isPublished: prog.isPublished === 1,
         status: prog.status,
       };
     });
   }, [savedPrograms]);
 
-  // Community items from legacy custom templates
+  // Community items from legacy custom templates + published automation programs
   const communityItems: UnifiedProgram[] = useMemo(() => {
-    if (!communityTemplates) return [];
-    return communityTemplates.map((t: any) => {
+    const items: UnifiedProgram[] = [];
+
+    // Published automation programs
+    if (communityAutomationPrograms) {
+      for (const prog of communityAutomationPrograms) {
+        const programData = prog.programJson as CookProgram | null;
+        items.push({
+          id: `community-prog-${prog.id}`,
+          source: "community" as const,
+          program: programData || {
+            name: prog.name,
+            description: prog.description || "",
+            category: (prog.category || "other") as CookProgram["category"],
+            method: (prog.method || "smoke") as CookProgram["method"],
+            difficulty: (prog.difficulty || "intermediate") as CookProgram["difficulty"],
+            estimatedTime: prog.estimatedTime || undefined,
+            tags: [],
+            variables: [],
+            steps: [],
+            tips: [],
+          },
+          dbId: prog.id,
+          isPublished: true,
+          authorName: prog.authorName || undefined,
+          forkCount: prog.forkCount || 0,
+        });
+      }
+    }
+
+    // Legacy custom templates
+    if (!communityTemplates) return items;
+    for (const t of communityTemplates as any[]) {
       const stages = JSON.parse(String(t.stagesJson || "[]"));
       const tips = t.tipsJson ? JSON.parse(String(t.tipsJson)) : [];
       // Convert legacy stages to steps
@@ -2868,7 +2955,7 @@ export default function CookPrograms() {
         actions: s.alertMessage ? [{ type: "send_notification" as ActionType, params: { message: s.alertMessage } }] : [],
       }));
 
-      return {
+      items.push({
         id: `community-${t.id}`,
         source: "community" as const,
         program: {
@@ -2888,9 +2975,11 @@ export default function CookPrograms() {
         isPublished: t.isPublished === 1,
         authorName: t.authorName || undefined,
         forkCount: t.forkCount || 0,
-      };
-    });
-  }, [communityTemplates]);
+      });
+    }
+
+    return items;
+  }, [communityTemplates, communityAutomationPrograms]);
 
   // Filter library
   const filteredLibrary = useMemo(() => {
@@ -3161,6 +3250,12 @@ export default function CookPrograms() {
                         <Badge variant="outline" className={`text-xs font-mono ${methodColor(item.program.method)}`}>
                           {methodLabel(item.program.method)}
                         </Badge>
+                        {item.isPublished && (
+                          <Badge className="bg-primary/20 text-primary border-primary/30 font-mono text-[10px]">
+                            <Globe className="h-2.5 w-2.5 mr-1" />
+                            published
+                          </Badge>
+                        )}
                       </div>
                       {item.program.description && (
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{item.program.description}</p>
@@ -3190,6 +3285,34 @@ export default function CookPrograms() {
                         >
                           <Play className="h-3.5 w-3.5" />
                           {!isMobile && <span className="ml-1.5">start</span>}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (item.dbId) {
+                            publishProgram.mutate({ id: item.dbId, publish: !item.isPublished });
+                          }
+                        }}
+                        className={`h-9 w-9 p-0 ${item.isPublished ? "text-primary" : "text-muted-foreground"}`}
+                        title={item.isPublished ? "Unpublish from Community" : "Publish to Community"}
+                      >
+                        <Globe className="h-3.5 w-3.5" />
+                      </Button>
+                      {item.isPublished && item.dbId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const url = `${window.location.origin}/cook-programs?share=${item.dbId}`;
+                            navigator.clipboard.writeText(url);
+                            toast.success("Share link copied!");
+                          }}
+                          className="h-9 w-9 p-0 text-muted-foreground"
+                          title="Copy share link"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                       <Button
@@ -3293,6 +3416,8 @@ export default function CookPrograms() {
         onFork={
           selectedItem?.source === "community" && selectedItem.customId
             ? () => { forkTemplate.mutate({ id: selectedItem.customId! }); setSelectedItem(null); }
+            : selectedItem?.source === "community" && selectedItem.dbId
+            ? () => { forkCommunityProgram.mutate({ sourceId: selectedItem.dbId! }); setSelectedItem(null); }
             : selectedItem?.source === "saved" && selectedItem.dbId
             ? () => { forkProgram.mutate({ sourceId: selectedItem.dbId! }); setSelectedItem(null); }
             : undefined
@@ -3305,7 +3430,9 @@ export default function CookPrograms() {
             : undefined
         }
         onPublish={
-          selectedItem?.source === "community" && selectedItem.customId
+          selectedItem?.source === "saved" && selectedItem.dbId
+            ? (pub) => { publishProgram.mutate({ id: selectedItem.dbId!, publish: pub }); }
+            : selectedItem?.source === "community" && selectedItem.customId
             ? (pub) => { publishTemplate.mutate({ id: selectedItem.customId!, publish: pub }); setSelectedItem(null); }
             : undefined
         }

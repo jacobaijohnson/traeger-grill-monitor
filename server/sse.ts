@@ -12,15 +12,16 @@
  */
 import type { Express, Request, Response } from "express";
 import { getTelemetry, getActiveCook, getFiredAlerts, getMissedAlerts, getStallInfo } from "./mqtt-manager";
-import { sdk } from "./_core/sdk";
+import { auth } from "./_core/auth";
+import { fromNodeHeaders } from "better-auth/node";
 
 // Track active SSE connections per user
-const sseClients = new Map<number, Set<Response>>();
+const sseClients = new Map<string, Set<Response>>();
 
 /**
  * Register a new SSE client for a user.
  */
-function addClient(userId: number, res: Response) {
+function addClient(userId: string, res: Response) {
   if (!sseClients.has(userId)) {
     sseClients.set(userId, new Set());
   }
@@ -30,7 +31,7 @@ function addClient(userId: number, res: Response) {
 /**
  * Remove an SSE client when the connection closes.
  */
-function removeClient(userId: number, res: Response) {
+function removeClient(userId: string, res: Response) {
   const clients = sseClients.get(userId);
   if (clients) {
     clients.delete(res);
@@ -44,7 +45,7 @@ function removeClient(userId: number, res: Response) {
  * Push a telemetry update to all connected SSE clients for a user.
  * Called from mqtt-manager when new telemetry arrives.
  */
-export function pushTelemetryUpdate(userId: number) {
+export function pushTelemetryUpdate(userId: string) {
   const clients = sseClients.get(userId);
   if (!clients || clients.size === 0) return;
 
@@ -101,7 +102,7 @@ export function pushTelemetryUpdate(userId: number) {
 /**
  * Push an alert event to all connected SSE clients for a user.
  */
-export function pushAlertEvent(userId: number, alert: { id: string; label: string; message: string; alertType: string }) {
+export function pushAlertEvent(userId: string, alert: { id: string; label: string; message: string; alertType: string }) {
   const clients = sseClients.get(userId);
   if (!clients || clients.size === 0) return;
 
@@ -125,15 +126,21 @@ export function pushAlertEvent(userId: number, alert: { id: string; label: strin
  * Push an automation event (phase change, auto-command, escalating alarm) to SSE clients.
  */
 export function pushAutomationEvent(
-  userId: number,
+  userId: string,
   event: {
     eventType: "phase_change" | "auto_command" | "escalating_alarm" | "phase_complete";
-    phase: number;
-    phaseName: string;
-    message: string;
-    autoCommand?: string;
+    phase?: number;
+    phaseName?: string;
+    phaseIndex?: number;
+    totalPhases?: number;
+    command?: string;
+    commandValue?: number;
+    alarmTemp?: number;
+    targetTemp?: number;
     probeTemp?: number;
     grillTemp?: number;
+    autoCommand?: string;
+    message?: string;
   }
 ) {
   const clients = sseClients.get(userId);
@@ -158,7 +165,7 @@ export function pushAutomationEvent(
 /**
  * Push a disconnect notification to all connected SSE clients for a user.
  */
-export function pushDisconnectEvent(userId: number, reason: string) {
+export function pushDisconnectEvent(userId: string, reason: string) {
   const clients = sseClients.get(userId);
   if (!clients || clients.size === 0) return;
 
@@ -180,23 +187,26 @@ export function pushDisconnectEvent(userId: number, reason: string) {
 
 /**
  * Register SSE routes on the Express app.
+ * Uses Better Auth session validation for authentication.
  */
 export function registerSSERoutes(app: Express) {
   app.get("/api/sse/telemetry", async (req: Request, res: Response) => {
     try {
-      const user = await sdk.authenticateRequest(req);
-      if (!user) {
+      const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+      });
+      if (!session?.user) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      setupSSEConnection(user.id, req, res);
+      setupSSEConnection(session.user.id, req, res);
     } catch {
       res.status(401).json({ error: "Unauthorized" });
     }
   });
 }
 
-function setupSSEConnection(userId: number, req: Request, res: Response) {
+function setupSSEConnection(userId: string, req: Request, res: Response) {
   // Set SSE headers
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -236,21 +246,13 @@ function setupSSEConnection(userId: number, req: Request, res: Response) {
 }
 
 /**
- * Get the count of active SSE connections (for monitoring).
+ * Get the total number of active SSE connections across all users.
  */
 export function getSSEClientCount(): number {
-  let total = 0;
+  let count = 0;
   const entries = Array.from(sseClients.values());
   for (const clients of entries) {
-    total += clients.size;
+    count += clients.size;
   }
-  return total;
-}
-
-/**
- * Get the count of active SSE connections for a specific user.
- * Used for shared session awareness ("2 viewers" indicator).
- */
-export function getSSEClientCountForUser(userId: number): number {
-  return sseClients.get(userId)?.size ?? 0;
+  return count;
 }

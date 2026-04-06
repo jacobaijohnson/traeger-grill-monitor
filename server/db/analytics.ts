@@ -60,7 +60,7 @@ const EMPTY_SUMMARY: CookAnalyticsSummary = {
   ratedCooks: 0, bestRatedCook: null, longestCook: null,
 };
 
-export async function getCookAnalyticsSummary(userId: number, grillId?: string): Promise<CookAnalyticsSummary> {
+export async function getCookAnalyticsSummary(userId: string, grillId?: string): Promise<CookAnalyticsSummary> {
   const result = await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -122,7 +122,7 @@ export async function getCookAnalyticsSummary(userId: number, grillId?: string):
   return result ?? EMPTY_SUMMARY;
 }
 
-export async function getCooksByMeatType(userId: number, grillId?: string): Promise<CookByMeatType[]> {
+export async function getCooksByMeatType(userId: string, grillId?: string): Promise<CookByMeatType[]> {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -155,7 +155,7 @@ export async function getCooksByMeatType(userId: number, grillId?: string): Prom
   }, "getCooksByMeatType") ?? [];
 }
 
-export async function getCooksByMethod(userId: number, grillId?: string): Promise<CookByMethod[]> {
+export async function getCooksByMethod(userId: string, grillId?: string): Promise<CookByMethod[]> {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -186,7 +186,7 @@ export async function getCooksByMethod(userId: number, grillId?: string): Promis
   }, "getCooksByMethod") ?? [];
 }
 
-export async function getCooksByMonth(userId: number, grillId?: string): Promise<CookByMonth[]> {
+export async function getCooksByMonth(userId: string, grillId?: string): Promise<CookByMonth[]> {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -223,7 +223,7 @@ export async function getCooksByMonth(userId: number, grillId?: string): Promise
   }, "getCooksByMonth") ?? [];
 }
 
-export async function getCooksByCut(userId: number, grillId?: string): Promise<CookByCut[]> {
+export async function getCooksByCut(userId: string, grillId?: string): Promise<CookByCut[]> {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))
@@ -266,7 +266,7 @@ export async function getCooksByCut(userId: number, grillId?: string): Promise<C
   }, "getCooksByCut") ?? [];
 }
 
-export async function getRatingDistribution(userId: number, grillId?: string): Promise<RatingDistribution[]> {
+export async function getRatingDistribution(userId: string, grillId?: string): Promise<RatingDistribution[]> {
   return await withDbRetry(async (db) => {
     const conditions = grillId
       ? and(eq(cookSessions.userId, userId), eq(cookSessions.grillId, grillId))

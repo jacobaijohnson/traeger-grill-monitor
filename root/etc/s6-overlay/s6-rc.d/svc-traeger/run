@@ -1,13 +1,13 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-echo "Starting Traeger Smoker Insight..."
+echo "Starting Traeger Smoker Insight on port ${PORT:-8420}..."
 
 cd /app
 
 # s6-setuidgid drops to the abc user (respects PUID/PGID)
 # s6-notifyoncheck provides readiness notification
 exec \
-    s6-notifyoncheck -d -n 300 -w 1000 -c "nc -z localhost ${PORT:-3000}" \
+    s6-notifyoncheck -d -n 300 -w 1000 -c "nc -z localhost ${PORT:-8420}" \
         s6-setuidgid abc \
             node dist/index.js

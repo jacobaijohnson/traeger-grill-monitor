@@ -1,6 +1,6 @@
 import { getLoginUrl } from "@/const";
+import { authClient, useSession } from "@/lib/auth-client";
 import { trpc } from "@/lib/trpc";
-import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
 type UseAuthOptions = {
@@ -11,74 +11,61 @@ type UseAuthOptions = {
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
     options ?? {};
+
+  const { data: session, isPending, error, refetch } = useSession();
   const utils = trpc.useUtils();
-
-  const meQuery = trpc.auth.me.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      utils.auth.me.setData(undefined, null);
-    },
-  });
 
   const logout = useCallback(async () => {
     try {
-      await logoutMutation.mutateAsync();
+      // Sign out via Better Auth client (clears session cookie)
+      await authClient.signOut();
     } catch (error: unknown) {
-      if (
-        error instanceof TRPCClientError &&
-        error.data?.code === "UNAUTHORIZED"
-      ) {
-        return;
-      }
-      throw error;
+      console.warn("[Auth] Sign-out error:", error);
     } finally {
+      // Also invalidate tRPC auth cache
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
+      // Redirect to login
+      window.location.href = getLoginUrl();
     }
-  }, [logoutMutation, utils]);
+  }, [utils]);
+
+  const user = useMemo(() => {
+    if (!session?.user) return null;
+    return {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image ?? null,
+      role: (session.user as any).role ?? "user",
+      createdAt: session.user.createdAt,
+      updatedAt: session.user.updatedAt,
+    };
+  }, [session]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
     return {
-      user: meQuery.data ?? null,
-      loading: meQuery.isLoading || logoutMutation.isPending,
-      error: meQuery.error ?? logoutMutation.error ?? null,
-      isAuthenticated: Boolean(meQuery.data),
+      user,
+      loading: isPending,
+      error: error ?? null,
+      isAuthenticated: Boolean(user),
     };
-  }, [
-    meQuery.data,
-    meQuery.error,
-    meQuery.isLoading,
-    logoutMutation.error,
-    logoutMutation.isPending,
-  ]);
+  }, [user, isPending, error]);
 
   useEffect(() => {
     if (!redirectOnUnauthenticated) return;
-    if (meQuery.isLoading || logoutMutation.isPending) return;
-    if (state.user) return;
+    if (isPending) return;
+    if (user) return;
     if (typeof window === "undefined") return;
-    if (window.location.pathname === redirectPath) return;
+    if (window.location.pathname === "/login") return;
+    if (window.location.pathname === "/register") return;
 
-    window.location.href = redirectPath
-  }, [
-    redirectOnUnauthenticated,
-    redirectPath,
-    logoutMutation.isPending,
-    meQuery.isLoading,
-    state.user,
-  ]);
+    window.location.href = redirectPath;
+  }, [redirectOnUnauthenticated, redirectPath, isPending, user]);
 
   return {
     ...state,
-    refresh: () => meQuery.refetch(),
+    refresh: () => refetch(),
     logout,
   };
 }

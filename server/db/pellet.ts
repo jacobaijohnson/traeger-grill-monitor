@@ -17,7 +17,7 @@ export async function insertPelletLog(data: InsertPelletLog) {
  * Get recent pellet logs for a specific grill.
  * Used for dashboard display and burn rate calculation.
  */
-export async function getRecentPelletLogs(userId: number, grillId: string, minutes = 480) {
+export async function getRecentPelletLogs(userId: string, grillId: string, minutes = 480) {
   return await withDbRetry(async (db) => {
     const since = new Date(Date.now() - minutes * 60 * 1000);
     return db
@@ -38,7 +38,7 @@ export async function getRecentPelletLogs(userId: number, grillId: string, minut
 /**
  * Get pellet logs for a specific cook session.
  */
-export async function getPelletLogsForSession(cookSessionId: number, userId: number) {
+export async function getPelletLogsForSession(cookSessionId: number, userId: string) {
   return await withDbRetry(async (db) => {
     return db
       .select()
@@ -73,7 +73,7 @@ export interface PelletConsumptionSummary {
  * Get pellet consumption summary for a user (optionally filtered by grillId).
  */
 export async function getPelletConsumptionSummary(
-  userId: number,
+  userId: string,
   grillId?: string
 ): Promise<PelletConsumptionSummary> {
   const result = await withDbRetry(async (db) => {
@@ -171,7 +171,7 @@ export async function getPelletConsumptionSummary(
  * Returns data points with pelletLevel, burnRate, and grillTemp over time.
  */
 export async function getPelletTrend(
-  userId: number,
+  userId: string,
   grillId?: string,
   days = 30
 ): Promise<Array<{ recordedAt: Date; pelletLevel: number; burnRateLbsPerHr: number | null; grillTemp: number | null }>> {
@@ -201,7 +201,7 @@ export async function getPelletTrend(
  * Calculates burn rate from the previous reading.
  */
 export async function persistPelletFromMqtt(
-  userId: number,
+  userId: string,
   grillId: string,
   pelletLevel: number,
   grillTemp: number,

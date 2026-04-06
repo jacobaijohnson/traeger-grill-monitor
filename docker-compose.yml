@@ -1,33 +1,44 @@
-# ─── Traeger Smoker Insight — Docker Compose (LSIO) ────
-# DSS Classification: DSS-1 (Public / Non-Sensitive)
+# ─── Traeger Smoker Insight — Docker Compose ─────────────
 #
-# Usage:
-#   1. Copy ENV_TEMPLATE.md values into a .env file
+# Default port: 8420 (IANA unassigned, no homelab conflicts)
+#
+# Quick start:
+#   1. Copy this file and adjust environment variables
 #   2. docker compose up -d
-#   3. Access at http://localhost:3000
+#   3. Access at http://<your-host>:8420
+#   4. First user to register becomes the admin (via ADMIN_EMAIL/ADMIN_PASSWORD)
 #
-# For MySQL/TiDB, either:
-#   a. Use the bundled MySQL service (default)
-#   b. Set DATABASE_URL to an external database and remove the mysql service
+# For external MySQL/MariaDB:
+#   Set DATABASE_URL and remove the mysql service below.
 
 services:
   traeger:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/jacobj/traeger-smoker-insight:latest
+    # Or build locally:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: traeger-smoker-insight
     ports:
-      - "${PORT:-3000}:3000"
+      - "8420:8420"
     environment:
-      # ─── LSIO Standard ───
+      # ─── LSIO Standard ─────────────────────────────
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-America/Los_Angeles}
-      # ─── App Config ───
+      # ─── App Config ────────────────────────────────
       - NODE_ENV=production
-      - PORT=3000
-      - DATABASE_URL=${DATABASE_URL:-mysql://traeger:traeger_pass@mysql:3306/traeger_dashboard}
-      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - PORT=8420
+      - DATABASE_URL=mysql://traeger:${MYSQL_PASSWORD:-traeger_pass}@mysql:3306/traeger_dashboard
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET to a random 64-char string}
+      # ─── Better Auth ───────────────────────────────
+      # Set this to your external URL if behind a reverse proxy
+      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:8420}
+      # ─── Admin Bootstrap ───────────────────────────
+      # On first boot, creates an admin user with these credentials.
+      # Remove after first login if desired.
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       - ${CONFIG_PATH:-./config}:/config
     depends_on:
@@ -43,8 +54,6 @@ services:
       MYSQL_DATABASE: traeger_dashboard
       MYSQL_USER: traeger
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-traeger_pass}
-    ports:
-      - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:

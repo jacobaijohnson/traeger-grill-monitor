@@ -11,7 +11,7 @@ export async function insertTelemetry(data: InsertTelemetryReading) {
   }, "insertTelemetry");
 }
 
-export async function getTelemetryForSession(cookSessionId: number, limit = 1000, userId?: number) {
+export async function getTelemetryForSession(cookSessionId: number, limit = 1000, userId?: string) {
   return await withDbRetry(async (db) => {
     const conditions = userId
       ? and(eq(telemetryReadings.cookSessionId, cookSessionId), eq(telemetryReadings.userId, userId))
@@ -25,7 +25,7 @@ export async function getTelemetryForSession(cookSessionId: number, limit = 1000
   }, "getTelemetryForSession") ?? [];
 }
 
-export async function getRecentTelemetry(userId: number, grillId: string, minutes = 60) {
+export async function getRecentTelemetry(userId: string, grillId: string, minutes = 60) {
   return await withDbRetry(async (db) => {
     const since = new Date(Date.now() - minutes * 60 * 1000);
     return db
@@ -44,7 +44,7 @@ export async function getRecentTelemetry(userId: number, grillId: string, minute
 }
 
 export async function persistTelemetryFromMqtt(
-  userId: number,
+  userId: string,
   telemetry: { grill: number; probe: number; ambient: number; set: number; probeSet: number; pelletLevel: number; systemStatus: number },
   grillId: string,
   cookSessionId?: number
@@ -92,7 +92,7 @@ export async function purgeStaleTelemetry(retentionDays = 90): Promise<number> {
 /**
  * Get total telemetry reading count for monitoring.
  */
-export async function getTelemetryCount(userId?: number): Promise<number> {
+export async function getTelemetryCount(userId?: string): Promise<number> {
   const result = await withDbRetry(async (db) => {
     const conditions = userId ? eq(telemetryReadings.userId, userId) : undefined;
     const rows = await db

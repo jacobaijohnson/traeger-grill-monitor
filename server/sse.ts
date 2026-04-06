@@ -83,6 +83,7 @@ export function pushTelemetryUpdate(userId: number) {
       firedAlerts,
       missedAlerts,
       stallInfo,
+      viewers: clients.size,
     },
     timestamp: Date.now(),
   });
@@ -244,4 +245,12 @@ export function getSSEClientCount(): number {
     total += clients.size;
   }
   return total;
+}
+
+/**
+ * Get the count of active SSE connections for a specific user.
+ * Used for shared session awareness ("2 viewers" indicator).
+ */
+export function getSSEClientCountForUser(userId: number): number {
+  return sseClients.get(userId)?.size ?? 0;
 }

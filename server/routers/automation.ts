@@ -115,6 +115,24 @@ function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[]
       }
     }
 
+    // --- Compound trigger: map secondary trigger ---
+    let secondaryTriggerType: "probe_temp" | "time" | "manual" | undefined;
+    let secondaryTriggerValue: number | undefined;
+    let triggerLogic = step.trigger.logic;
+
+    if (step.trigger.secondary) {
+      const sec = step.trigger.secondary;
+      if (sec.type === "probe_temp" || sec.type === "probe_temp_drop" || sec.type === "grill_temp") {
+        secondaryTriggerType = sec.type === "grill_temp" ? "probe_temp" : "probe_temp"; // simplified
+        secondaryTriggerValue = typeof sec.value === "number" ? sec.value : Number(sec.value) || 0;
+      } else if (sec.type === "timer") {
+        secondaryTriggerType = "time";
+        secondaryTriggerValue = typeof sec.value === "number" ? sec.value : Number(sec.value) || 0;
+      } else if (sec.type === "manual") {
+        secondaryTriggerType = "manual";
+      }
+    }
+
     return {
       name: step.name,
       grillTemp,
@@ -130,6 +148,9 @@ function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[]
       autoSetKeepWarm,
       holdAfterTrigger,
       requireAcknowledge,
+      secondaryTriggerType,
+      secondaryTriggerValue,
+      triggerLogic,
     };
   });
 }

@@ -12,6 +12,7 @@ import LiveCook from "./pages/LiveCook";
 import History from "./pages/History";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Automation from "./pages/Automation";
 import DashboardLayout from "./components/DashboardLayout";
 
 function Router() {
@@ -23,8 +24,7 @@ function Router() {
         <Route path={"/controls"} component={Controls} />
         <Route path={"/cook-guide"} component={CookGuide} />
         <Route path={"/live-cook"} component={LiveCook} />
-        {/* Keep old route for backward compat */}
-        <Route path={"/automation"} component={LiveCook} />
+        <Route path={"/automation"} component={Automation} />
         <Route path={"/history"} component={History} />
         <Route path={"/analytics"} component={Analytics} />
         <Route path={"/settings"} component={Settings} />

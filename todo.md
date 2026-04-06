@@ -298,3 +298,29 @@
 - [x] Alert escalation: alarm every 5°F until user acknowledges (escalating_alarm action)
 - [x] Auto-reduce to lowest temp (165°F) when final target reached (prevent overcook)
 - [x] Write tests for phase transitions, alarm logic, and auto-commands (27 tests)
+
+## Compound Triggers — Temp + Timer with Priority Logic
+- [x] Design compound trigger model: primary + secondary triggers with logic operator (OR/AND/fallback)
+- [x] Update StepTrigger type in shared/cook-programs.ts to support compound triggers
+- [x] Update resolveProgram to resolve variables in compound triggers
+- [x] Update MQTT evaluateAutomation engine to evaluate compound trigger logic
+- [x] Update automation router bridge (programStepsToAutomationStages) for compound triggers
+- [x] Update all 10 preset templates with appropriate compound triggers (timer fallbacks, temp priorities)
+- [x] Update Automation UI StepPreview to display both temp and timer triggers per step
+- [x] Update Automation UI to allow configuring compound triggers when creating custom programs
+- [x] Write tests for compound trigger evaluation (OR, AND, fallback, priority) — 20 tests
+- [x] Verify existing tests still pass after trigger model changes (202/202 pass)
+- [x] Ensure alert vs alarm distinction is visible in template step preview UI (AlertBadge component)
+- [x] Show alert/alarm configuration options when creating/editing custom programs (AlertBadge + StepPreview)
+
+## UX Redesign — Progressive Disclosure, Mobile-First, Shared Sessions
+- [x] Design progressive disclosure pattern: at-a-glance → tap-to-expand → deep-dive (UX_DESIGN_NOTES.md)
+- [x] Rewrite StepPreview: show compound triggers (primary + secondary with logic), alert vs alarm icons, expandable detail
+- [x] Rewrite LiveExecution: mobile-first hero card, big status at top, expandable phase details
+- [x] Make PresetLibrary mobile-responsive: single-column on mobile, smart card layout
+- [x] Make program cards mobile-responsive with touch-friendly action buttons
+- [x] Add shared session awareness: viewer count from SSE, eye icon when 2+ viewers
+- [x] Ensure all touch targets are 44px+ for mobile (min-h-[44px] / min-h-[48px] on all buttons)
+- [x] Add collapsible sections that remember state (Collapsible components, no forced popups)
+- [x] Add contextual education: useFirstUseHint hook, localStorage-persisted, auto-dismiss
+- [x] Mobile-first responsive breakpoints across all Automation components (useIsMobile + responsive classes)

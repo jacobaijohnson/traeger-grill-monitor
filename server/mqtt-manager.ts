@@ -200,6 +200,29 @@ function trackPeaks(session: MqttSession): void {
  * - Auto-commands (set grill temp, super smoke, keep warm)
  * - Phase advancement
  */
+/**
+ * Check if a single trigger condition is met.
+ */
+function checkSingleTrigger(
+  type: "probe_temp" | "time" | "manual",
+  value: number,
+  probeTemp: number,
+  _grillTemp: number,
+  phaseStartedAt: number | undefined,
+  timerStartedAt: number | undefined,
+): boolean {
+  if (type === "probe_temp") {
+    return probeTemp >= value;
+  } else if (type === "time") {
+    // Timer can use its own start time (for secondary timers) or phase start
+    const startTime = timerStartedAt ?? phaseStartedAt;
+    const elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
+    return elapsed >= value;
+  }
+  // "manual" triggers never auto-fire
+  return false;
+}
+
 function evaluateAutomation(userId: number, session: MqttSession): void {
   const cook = session.activeCook;
   if (!cook?.automationStages || cook.automationStages.length === 0) return;
@@ -212,16 +235,58 @@ function evaluateAutomation(userId: number, session: MqttSession): void {
   const probeTemp = telemetry.probe;
   const grillTemp = telemetry.grill;
 
-  // --- Check if phase trigger has been met ---
-  let triggerMet = false;
-
-  if (stage.triggerType === "probe_temp") {
-    triggerMet = probeTemp >= stage.triggerValue;
-  } else if (stage.triggerType === "time") {
-    const elapsed = cook.phaseStartedAt ? (Date.now() - cook.phaseStartedAt) / 1000 : 0;
-    triggerMet = elapsed >= stage.triggerValue;
+  // --- Initialize timer tracking for this phase ---
+  if (!stage.timerStartedAt && cook.phaseStartedAt) {
+    stage.timerStartedAt = cook.phaseStartedAt;
   }
-  // "manual" triggers never auto-fire
+
+  // --- Check primary trigger ---
+  const primaryMet = checkSingleTrigger(
+    stage.triggerType, stage.triggerValue,
+    probeTemp, grillTemp,
+    cook.phaseStartedAt, undefined,
+  );
+
+  // --- Check secondary trigger (if compound) ---
+  let secondaryMet = false;
+  if (stage.secondaryTriggerType && stage.secondaryTriggerValue != null) {
+    secondaryMet = checkSingleTrigger(
+      stage.secondaryTriggerType, stage.secondaryTriggerValue,
+      probeTemp, grillTemp,
+      cook.phaseStartedAt, stage.timerStartedAt,
+    );
+  }
+
+  // --- Track which triggers have fired (for AND logic) ---
+  if (primaryMet) stage.primaryFired = true;
+  if (secondaryMet) stage.secondaryFired = true;
+
+  // --- Apply compound logic ---
+  let triggerMet = false;
+  const logic = stage.triggerLogic;
+
+  if (!stage.secondaryTriggerType || !logic) {
+    // Simple trigger: only primary matters
+    triggerMet = primaryMet;
+  } else if (logic === "or" || logic === "fallback") {
+    // OR / Fallback: whichever fires first
+    triggerMet = primaryMet || secondaryMet;
+  } else if (logic === "and") {
+    // AND: both must have fired at some point
+    triggerMet = !!stage.primaryFired && !!stage.secondaryFired;
+  } else if (logic === "priority") {
+    // Priority: primary takes precedence, but secondary can also trigger
+    triggerMet = primaryMet || secondaryMet;
+  }
+
+  // Log which trigger fired for compound triggers
+  if (triggerMet && logic && stage.secondaryTriggerType && !cook.autoCommandsSent.includes(`trigger-${phase}`)) {
+    const firedBy = primaryMet ? "primary" : "secondary";
+    const triggerDesc = primaryMet
+      ? `${stage.triggerType}=${stage.triggerValue}`
+      : `${stage.secondaryTriggerType}=${stage.secondaryTriggerValue}`;
+    console.log(`[AUTO] User ${userId}: Compound trigger (${logic}) met by ${firedBy}: ${triggerDesc}`);
+  }
 
   // --- Escalating alarms: re-alarm every N°F above trigger ---
   if (triggerMet && stage.alarmIntervalDegrees && stage.alarmIntervalDegrees > 0) {
@@ -359,6 +424,14 @@ function advanceAutomationPhase(userId: number, session: MqttSession): void {
   cook.phaseStartedAt = Date.now();
   cook.lastAlarmTemp = undefined;
   cook.phaseAcknowledged = undefined;
+
+  // Reset compound trigger state for the new phase
+  const nextStageObj = cook.automationStages[nextPhase];
+  if (nextStageObj) {
+    nextStageObj.primaryFired = false;
+    nextStageObj.secondaryFired = false;
+    nextStageObj.timerStartedAt = Date.now();
+  }
 
   const nextStage = cook.automationStages[nextPhase];
 

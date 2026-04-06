@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
+export interface SSEAutomationEvent {
+  eventType: "phase_change" | "auto_command" | "escalating_alarm" | "phase_complete";
+  phase: number;
+  phaseName: string;
+  message: string;
+  autoCommand?: string;
+  probeTemp?: number;
+  grillTemp?: number;
+}
+
 export interface SSETelemetryData {
   telemetry: {
     grill: number;
@@ -17,7 +27,21 @@ export interface SSETelemetryData {
     peakGrillTemp: number;
     peakProbeTemp: number;
     alertCount: number;
+    // Automation state
+    automationId?: number;
+    automationPhase?: number;
+    automationStages?: Array<{
+      name: string;
+      grillTemp: number;
+      triggerType: string;
+      triggerValue: number;
+      alertType?: string;
+    }>;
+    phaseAcknowledged?: boolean;
+    lastAlarmTemp?: number;
+    autoCommandsSent?: string[];
   } | null;
+  viewers?: number;
   firedAlerts: Array<{
     id: string;
     label: string;
@@ -55,6 +79,7 @@ export interface SSEDisconnectEvent {
 type SSEMessage =
   | { type: "telemetry"; data: SSETelemetryData; timestamp: number }
   | { type: "alert"; data: SSEAlertEvent; timestamp: number }
+  | { type: "automation"; data: SSEAutomationEvent; timestamp: number }
   | { type: "disconnect"; data: SSEDisconnectEvent; timestamp: number };
 
 interface UseSSETelemetryOptions {
@@ -62,6 +87,8 @@ interface UseSSETelemetryOptions {
   enabled?: boolean;
   /** Callback when a new alert fires */
   onAlert?: (alert: SSEAlertEvent) => void;
+  /** Callback when an automation event occurs */
+  onAutomation?: (event: SSEAutomationEvent) => void;
   /** Callback when the grill disconnects */
   onDisconnect?: (reason: string) => void;
 }
@@ -79,16 +106,18 @@ interface UseSSETelemetryOptions {
  * ```
  */
 export function useSSETelemetry(options: UseSSETelemetryOptions = {}) {
-  const { enabled = true, onAlert, onDisconnect } = options;
+  const { enabled = true, onAlert, onAutomation, onDisconnect } = options;
   const [telemetry, setTelemetry] = useState<SSETelemetryData | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const onAlertRef = useRef(onAlert);
+  const onAutomationRef = useRef(onAutomation);
   const onDisconnectRef = useRef(onDisconnect);
 
   // Keep callback refs current
   onAlertRef.current = onAlert;
+  onAutomationRef.current = onAutomation;
   onDisconnectRef.current = onDisconnect;
 
   const connect = useCallback(() => {
@@ -114,6 +143,9 @@ export function useSSETelemetry(options: UseSSETelemetryOptions = {}) {
             break;
           case "alert":
             onAlertRef.current?.(msg.data);
+            break;
+          case "automation":
+            onAutomationRef.current?.(msg.data);
             break;
           case "disconnect":
             onDisconnectRef.current?.(msg.data.reason);

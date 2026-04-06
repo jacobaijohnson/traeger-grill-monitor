@@ -27,9 +27,25 @@ export type TriggerType =
   | "manual"
   | "immediate";
 
+/**
+ * Compound trigger system.
+ * - `type` + `value` = primary trigger
+ * - `secondary` = optional second trigger
+ * - `logic` controls how they combine:
+ *     "or"       → whichever fires first advances the step
+ *     "and"      → both must be satisfied before advancing
+ *     "fallback" → primary is preferred, secondary is a safety net (same as "or" in execution)
+ *     "priority" → secondary runs in background, primary takes precedence if it fires
+ *   If no logic is set, only the primary trigger is used.
+ */
 export interface StepTrigger {
   type: TriggerType;
   value?: number | string;   // Supports {{variable}} references; optional for manual/immediate
+  secondary?: {
+    type: TriggerType;
+    value?: number | string;
+  };
+  logic?: "or" | "and" | "fallback" | "priority";
 }
 
 export type ActionType =
@@ -131,6 +147,13 @@ export const ACTION_CATALOG: ActionMeta[] = [
   { type: "end_session", label: "End Session", category: "software", description: "Mark the cook session as complete" },
 ];
 
+export const COMPOUND_LOGIC_OPTIONS: Array<{ value: StepTrigger["logic"]; label: string; description: string }> = [
+  { value: "or", label: "Either (OR)", description: "Whichever trigger fires first advances the step" },
+  { value: "and", label: "Both (AND)", description: "Both triggers must be satisfied before advancing" },
+  { value: "fallback", label: "Fallback", description: "Primary is preferred; secondary is a safety net if primary takes too long" },
+  { value: "priority", label: "Priority", description: "Primary takes precedence; secondary runs in background" },
+];
+
 export const TRIGGER_CATALOG: Array<{ type: TriggerType; label: string; description: string; valueLabel?: string; valueUnit?: string; valueMin?: number; valueMax?: number }> = [
   { type: "probe_temp", label: "Probe Temp Reached", description: "Fires when probe reaches target", valueLabel: "Target Temp", valueUnit: "°F", valueMin: 50, valueMax: 300 },
   { type: "probe_temp_drop", label: "Probe Temp Dropped", description: "Fires when probe drops below target", valueLabel: "Target Temp", valueUnit: "°F", valueMin: 50, valueMax: 300 },
@@ -188,6 +211,10 @@ export function resolveProgram(
     trigger: {
       ...step.trigger,
       value: step.trigger.value != null ? resolveVariable(step.trigger.value, resolved) : undefined,
+      secondary: step.trigger.secondary ? {
+        ...step.trigger.secondary,
+        value: step.trigger.secondary.value != null ? resolveVariable(step.trigger.secondary.value, resolved) : undefined,
+      } : undefined,
     },
     entryActions: step.entryActions?.map(a => ({
       ...a,
@@ -252,7 +279,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Low & Slow",
         description: "Smoke at low temp until the stall/wrap point",
-        trigger: { type: "probe_temp", value: "{{wrap_point}}" },
+        trigger: {
+          type: "probe_temp", value: "{{wrap_point}}",
+          secondary: { type: "timer", value: 28800 },  // 8-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{smoke_temp}}" } },
           { type: "super_smoke_on" },
@@ -270,7 +301,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "The Crank",
         description: "Increase temp to push through the stall after wrapping",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 21600 },  // 6-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{crank_temp}}" } },
           { type: "super_smoke_off" },
@@ -327,7 +362,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Low Smoke",
         description: "Bring the steak up slowly with smoke",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 3600 },  // 1-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{smoke_temp}}" } },
           { type: "super_smoke_on" },
@@ -386,7 +425,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Smoke",
         description: "Low and slow smoke until wrap point",
-        trigger: { type: "probe_temp", value: "{{wrap_point}}" },
+        trigger: {
+          type: "probe_temp", value: "{{wrap_point}}",
+          secondary: { type: "timer", value: 25200 },  // 7-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{smoke_temp}}" } },
           { type: "super_smoke_on" },
@@ -397,7 +440,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Wrapped Push",
         description: "Push through the stall wrapped",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 18000 },  // 5-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "super_smoke_off" },
           { type: "send_notification", params: { message: "Wrapped and pushing to {{pull_temp}}°F" } },
@@ -616,7 +663,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Roast",
         description: "High heat roast until probe hits target in the thickest part of the thigh",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 5400 },  // 90-min fallback safety
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{grill_temp}}" } },
         ],
@@ -651,7 +702,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Low Smoke",
         description: "Gentle smoke to build flavor without overcooking",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 10800 },  // 3-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{smoke_temp}}" } },
           { type: "super_smoke_on" },
@@ -689,7 +744,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Low Smoke",
         description: "Build deep smoke flavor at low temp",
-        trigger: { type: "probe_temp", value: "{{skin_crisp_point}}" },
+        trigger: {
+          type: "probe_temp", value: "{{skin_crisp_point}}",
+          secondary: { type: "timer", value: 14400 },  // 4-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{smoke_temp}}" } },
           { type: "super_smoke_on" },
@@ -702,7 +761,11 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       {
         name: "Crisp Skin",
         description: "High heat to crisp the skin and finish cooking",
-        trigger: { type: "probe_temp", value: "{{pull_temp}}" },
+        trigger: {
+          type: "probe_temp", value: "{{pull_temp}}",
+          secondary: { type: "timer", value: 7200 },  // 2-hour fallback
+          logic: "or",
+        },
         entryActions: [
           { type: "set_grill_temp", params: { temp: "{{crisp_temp}}" } },
         ],

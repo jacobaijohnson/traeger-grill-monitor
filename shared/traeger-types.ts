@@ -111,6 +111,13 @@ export interface AutomationStage {
   autoSetKeepWarm?: boolean;                  // Auto-toggle keep warm when entering this phase
   holdAfterTrigger?: boolean;                 // Stay in this phase after trigger (for rest/hold)
   requireAcknowledge?: boolean;               // Block phase advance until user acknowledges
+  // --- Compound trigger extensions ---
+  secondaryTriggerType?: "probe_temp" | "time" | "manual";
+  secondaryTriggerValue?: number;
+  triggerLogic?: "or" | "and" | "fallback" | "priority";  // How primary + secondary combine
+  primaryFired?: boolean;                     // Runtime: has primary trigger fired (for AND logic)
+  secondaryFired?: boolean;                   // Runtime: has secondary trigger fired (for AND logic)
+  timerStartedAt?: number;                    // Runtime: when timer-based trigger started counting
 }
 
 /**

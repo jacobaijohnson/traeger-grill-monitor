@@ -28,6 +28,7 @@ import {
   BookOpen,
   Flame,
   Clock,
+  BarChart3,
   Settings as SettingsIcon,
   LogOut,
   PanelLeft,
@@ -46,6 +47,7 @@ const menuItems = [
   { icon: BookOpen, label: "Cook Guide", path: "/cook-guide" },
   { icon: Flame, label: "Live Cook", path: "/live-cook" },
   { icon: Clock, label: "History", path: "/history" },
+  { icon: BarChart3, label: "Analytics", path: "/analytics" },
   { icon: SettingsIcon, label: "Settings", path: "/settings" },
 ];
 

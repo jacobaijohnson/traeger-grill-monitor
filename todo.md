@@ -181,3 +181,12 @@
 - [x] Add drag-to-pan on graph to slide through timeline
 - [x] Show current time window position indicator (e.g., "2:15 PM - 2:25 PM")
 - [x] Auto-follow mode: graph follows latest data until user manually navigates backward
+
+## Cook History Analytics
+- [x] Server-side analytics queries: aggregate cook stats (total cooks, total time, avg duration)
+- [x] Per-cut breakdown: average cook time, count, success rate per meat type and cut
+- [x] Doneness success rate: how often target temp was reached vs. over/under-cooked
+- [x] Trends over time: cooks per week/month, average ratings over time
+- [x] Analytics page UI with stat cards, bar charts, and trend lines
+- [x] Add Analytics navigation entry in sidebar
+- [x] Write tests for analytics queries

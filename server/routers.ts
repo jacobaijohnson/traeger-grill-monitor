@@ -45,6 +45,12 @@ import {
   updateCookSessionStatus,
   updateCookSessionAlerts,
   persistTelemetryFromMqtt,
+  getCookAnalyticsSummary,
+  getCooksByMeatType,
+  getCooksByMethod,
+  getCooksByMonth,
+  getCooksByCut,
+  getRatingDistribution,
 } from "./db";
 import { COMMANDS } from "@shared/traeger-types";
 import { COOK_TEMPLATES } from "@shared/cook-templates";
@@ -829,6 +835,39 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         await deleteAutomationProgram(input.id);
         return { success: true };
+      }),
+  }),
+
+  // ===== Cook Analytics =====
+  analytics: router({
+    summary: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getCookAnalyticsSummary(ctx.user.id);
+      }),
+
+    byMeatType: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getCooksByMeatType(ctx.user.id);
+      }),
+
+    byMethod: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getCooksByMethod(ctx.user.id);
+      }),
+
+    byMonth: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getCooksByMonth(ctx.user.id);
+      }),
+
+    byCut: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getCooksByCut(ctx.user.id);
+      }),
+
+    ratingDistribution: protectedProcedure
+      .query(async ({ ctx }) => {
+        return getRatingDistribution(ctx.user.id);
       }),
   }),
 });

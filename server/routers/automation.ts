@@ -6,6 +6,10 @@ import {
   getActiveAutomation,
   updateAutomationState,
   deleteAutomationProgram,
+  createProgramExecution,
+  updateExecutionOutcome,
+  getActiveExecution,
+  appendExecutionLog,
 } from "../db";
 import {
   loadAutomationProgram,
@@ -243,6 +247,28 @@ export const automationRouter = router({
       // Convert to legacy AutomationStage format for the MQTT engine
       const automationStages = programStepsToAutomationStages(resolvedSteps);
 
+      // Create execution history record
+      try {
+        const executionId = await createProgramExecution({
+          userId: ctx.user.id,
+          automationProgramId: input.id,
+          programName: prog.name,
+          programCategory: prog.category ?? null,
+          programMethod: prog.method ?? null,
+          programMeatCut: prog.meatCut ?? null,
+          cookSessionId: input.cookSessionId ?? null,
+          grillId: input.grillId ?? prog.grillId ?? null,
+          variableValuesJson: varValues,
+          totalSteps: resolvedSteps.length,
+          stepsCompleted: 0,
+          outcome: "running",
+          executionLogJson: [{ timestamp: Date.now(), event: "started", detail: `Program started with ${resolvedSteps.length} steps` }],
+        });
+        console.log(`[Execution] Created execution #${executionId} for program #${input.id}`);
+      } catch (e) {
+        console.warn("[Execution] Failed to create execution record:", e);
+      }
+
       // Load into MQTT manager
       loadAutomationProgram(ctx.user.id, input.id, automationStages, varValues);
 
@@ -276,8 +302,27 @@ export const automationRouter = router({
   // Stop/abort a running program
   stop: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       await updateAutomationState(input.id, 0, false);
+
+      // Finalize execution history record
+      try {
+        const activeExec = await getActiveExecution(ctx.user.id);
+        if (activeExec && activeExec.automationProgramId === input.id) {
+          await updateExecutionOutcome(activeExec.id, "aborted", {
+            endedAt: new Date(),
+          });
+          await appendExecutionLog(activeExec.id, {
+            timestamp: Date.now(),
+            event: "stopped",
+            detail: "Program manually stopped by user",
+          });
+          console.log(`[Execution] Finalized execution #${activeExec.id} as aborted`);
+        }
+      } catch (e) {
+        console.warn("[Execution] Failed to finalize execution record:", e);
+      }
+
       return { success: true };
     }),
 

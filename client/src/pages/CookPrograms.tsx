@@ -72,8 +72,30 @@ import {
   GripVertical,
   ArrowRight,
   Layers,
+  History,
+  Star,
+  StarOff,
+  CalendarDays,
+  TrendingUp,
+  ExternalLink,
 } from "lucide-react";
-import { useState, useMemo, useCallback, useEffect, Fragment } from "react";
+import { useState, useMemo, useCallback, useEffect, Fragment, useId } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import type {
@@ -1141,25 +1163,51 @@ function ActionEditor({
   );
 }
 
-function StepBuilder({
+function SortableStepBuilder({
   step,
   index,
+  stepId,
   onChange,
   onRemove,
 }: {
   step: ProgramStep;
   index: number;
+  stepId: string;
   onChange: (s: ProgramStep) => void;
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stepId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
 
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div ref={setNodeRef} style={style}>
+    <Collapsible open={expanded && !isDragging} onOpenChange={setExpanded}>
+      <div className={`rounded-lg border bg-card overflow-hidden ${isDragging ? "border-primary shadow-lg" : "border-border"}`}>
         <CollapsibleTrigger asChild>
           <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-accent/30 transition-colors">
-            <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+            <button
+              {...attributes}
+              {...listeners}
+              className="touch-none cursor-grab active:cursor-grabbing p-0.5 rounded hover:bg-accent/50 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Drag to reorder step"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground/60 hover:text-primary shrink-0" />
+            </button>
             <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold font-mono shrink-0">
               {index + 1}
             </div>
@@ -1328,6 +1376,7 @@ function StepBuilder({
         </CollapsibleContent>
       </div>
     </Collapsible>
+    </div>
   );
 }
 
@@ -1471,6 +1520,353 @@ function VariableBuilder({
 
 // ─── Full Program Builder Dialog ─────────────────────
 
+// ═══════════════════════════════════════════════════════
+// ─── EXECUTION HISTORY TAB ──────────────────────────
+// ═══════════════════════════════════════════════════════
+
+function ExecutionHistoryTab({
+  executions,
+  onReview,
+  isMobile,
+}: {
+  executions: any[];
+  onReview: (id: number, notes?: string, rating?: number) => void;
+  isMobile: boolean;
+}) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [reviewRating, setReviewRating] = useState(0);
+
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatDurationMs = (start: string | Date, end: string | Date | null) => {
+    if (!end) return "In progress";
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+    if (ms < 3600000) return `${Math.round(ms / 60000)}min`;
+    const hrs = Math.floor(ms / 3600000);
+    const mins = Math.round((ms % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  };
+
+  const outcomeColor = (outcome: string) => {
+    switch (outcome) {
+      case "completed": return "text-green-400";
+      case "running": return "text-amber-400";
+      case "aborted": return "text-red-400";
+      case "failed": return "text-red-500";
+      default: return "text-muted-foreground";
+    }
+  };
+
+  const outcomeBadge = (outcome: string) => {
+    switch (outcome) {
+      case "completed": return "bg-green-500/10 text-green-400 border-green-500/20";
+      case "running": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+      case "aborted": return "bg-red-500/10 text-red-400 border-red-500/20";
+      case "failed": return "bg-red-500/10 text-red-500 border-red-500/20";
+      default: return "bg-muted text-muted-foreground border-border";
+    }
+  };
+
+  const handleExpand = (exec: any) => {
+    if (expandedId === exec.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(exec.id);
+      setReviewNotes(exec.notes || "");
+      setReviewRating(exec.rating || 0);
+    }
+  };
+
+  if (executions.length === 0) {
+    return (
+      <Card className="bg-card border-border">
+        <CardContent className="p-6 sm:p-8 text-center">
+          <History className="h-8 w-8 text-muted-foreground mx-auto mb-3 opacity-30" />
+          <p className="text-muted-foreground text-sm font-mono">
+            No execution history yet.
+          </p>
+          <p className="text-xs text-muted-foreground/60 mt-1">
+            Start a program from the Library or My Programs tab to begin tracking.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Summary stats
+  const totalRuns = executions.length;
+  const completedRuns = executions.filter((e: any) => e.outcome === "completed").length;
+  const avgRating = executions.filter((e: any) => e.rating).length > 0
+    ? (executions.filter((e: any) => e.rating).reduce((sum: number, e: any) => sum + (e.rating || 0), 0) /
+       executions.filter((e: any) => e.rating).length).toFixed(1)
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary Cards */}
+      <div className={`grid gap-3 ${isMobile ? "grid-cols-2" : "grid-cols-4"}`}>
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-foreground font-mono">{totalRuns}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Total Runs</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-green-400 font-mono">{completedRuns}</div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Completed</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-foreground font-mono">
+              {completedRuns > 0 ? `${Math.round((completedRuns / totalRuns) * 100)}%` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Success Rate</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-amber-400 font-mono">
+              {avgRating ? `${avgRating}` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">Avg Rating</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Execution List */}
+      <div className="space-y-2">
+        {executions.map((exec: any) => (
+          <Collapsible key={exec.id} open={expandedId === exec.id} onOpenChange={() => handleExpand(exec)}>
+            <div className="rounded-lg border border-border bg-card overflow-hidden">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-accent/30 transition-colors">
+                  {/* Outcome indicator */}
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${exec.outcome === "completed" ? "bg-green-400" : exec.outcome === "running" ? "bg-amber-400 animate-pulse" : "bg-red-400"}`} />
+
+                  {/* Program info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground text-sm truncate">
+                        {exec.programName}
+                      </span>
+                      <Badge variant="outline" className={`text-[9px] font-mono border ${outcomeBadge(exec.outcome)}`}>
+                        {exec.outcome}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5">
+                      <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
+                        <CalendarDays className="h-3 w-3" />
+                        {formatDate(exec.startedAt)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDurationMs(exec.startedAt, exec.endedAt)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {exec.stepsCompleted}/{exec.totalSteps} steps
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Rating stars */}
+                  {exec.rating && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <Star
+                          key={s}
+                          className={`h-3 w-3 ${s <= exec.rating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30"}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Peak temps */}
+                  {(exec.peakGrillTemp || exec.peakProbeTemp) && (
+                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono text-muted-foreground shrink-0">
+                      {exec.peakGrillTemp && (
+                        <span className="flex items-center gap-0.5">
+                          <Flame className="h-3 w-3 text-orange-400" />
+                          {Math.round(exec.peakGrillTemp)}°F
+                        </span>
+                      )}
+                      {exec.peakProbeTemp && (
+                        <span className="flex items-center gap-0.5">
+                          <Thermometer className="h-3 w-3 text-red-400" />
+                          {Math.round(exec.peakProbeTemp)}°F
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {expandedId === exec.id ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                </div>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="px-3 pb-4 space-y-4 border-t border-border/50 pt-3">
+                  {/* Details Grid */}
+                  <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Details</div>
+                      <div className="space-y-1">
+                        {exec.programCategory && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">Category:</span>
+                            <span className="text-foreground capitalize">{exec.programCategory}</span>
+                          </div>
+                        )}
+                        {exec.programMethod && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">Method:</span>
+                            <span className="text-foreground capitalize">{exec.programMethod}</span>
+                          </div>
+                        )}
+                        {exec.programMeatCut && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">Cut:</span>
+                            <span className="text-foreground">{exec.programMeatCut}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Started:</span>
+                          <span className="text-foreground">{formatDate(exec.startedAt)}</span>
+                        </div>
+                        {exec.endedAt && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">Ended:</span>
+                            <span className="text-foreground">{formatDate(exec.endedAt)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Peak Temps */}
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Performance</div>
+                      <div className="space-y-1">
+                        {exec.peakGrillTemp && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Flame className="h-3 w-3 text-orange-400" />
+                            <span className="text-muted-foreground">Peak Grill:</span>
+                            <span className="text-foreground font-mono">{Math.round(exec.peakGrillTemp)}°F</span>
+                          </div>
+                        )}
+                        {exec.peakProbeTemp && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <Thermometer className="h-3 w-3 text-red-400" />
+                            <span className="text-muted-foreground">Peak Probe:</span>
+                            <span className="text-foreground font-mono">{Math.round(exec.peakProbeTemp)}°F</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-xs">
+                          <TrendingUp className="h-3 w-3 text-primary" />
+                          <span className="text-muted-foreground">Steps:</span>
+                          <span className="text-foreground font-mono">{exec.stepsCompleted} / {exec.totalSteps}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Execution Log */}
+                  {exec.executionLogJson && Array.isArray(exec.executionLogJson) && exec.executionLogJson.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Execution Log</div>
+                      <div className="bg-secondary/30 rounded-lg p-2 max-h-32 overflow-y-auto space-y-1">
+                        {(exec.executionLogJson as Array<{timestamp: number; event: string; detail?: string}>).map((entry, i) => (
+                          <div key={i} className="flex items-start gap-2 text-[10px] font-mono">
+                            <span className="text-muted-foreground/60 shrink-0">
+                              {new Date(entry.timestamp).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" })}
+                            </span>
+                            <span className={outcomeColor(entry.event === "started" ? "running" : entry.event === "stopped" ? "aborted" : "completed")}>
+                              {entry.event}
+                            </span>
+                            {entry.detail && (
+                              <span className="text-muted-foreground truncate">{entry.detail}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cook Session Link */}
+                  {exec.cookSessionId && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="font-mono text-xs h-7"
+                        onClick={() => window.location.href = `/cook-history`}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        View Cook Session #{exec.cookSessionId}
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Post-Cook Review */}
+                  {exec.outcome !== "running" && (
+                    <div className="space-y-2 pt-2 border-t border-border/50">
+                      <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Post-Cook Review</div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <button
+                            key={s}
+                            onClick={() => setReviewRating(s)}
+                            className="p-0.5 hover:scale-110 transition-transform"
+                          >
+                            <Star
+                              className={`h-5 w-5 ${s <= reviewRating ? "text-amber-400 fill-amber-400" : "text-muted-foreground/30 hover:text-amber-400/50"}`}
+                            />
+                          </button>
+                        ))}
+                        {reviewRating > 0 && (
+                          <span className="text-xs text-muted-foreground ml-2 font-mono">{reviewRating}/5</span>
+                        )}
+                      </div>
+                      <Textarea
+                        value={reviewNotes}
+                        onChange={(e) => setReviewNotes(e.target.value)}
+                        placeholder="How did this cook turn out? Any notes for next time..."
+                        className="bg-secondary text-xs font-mono min-h-[60px]"
+                        rows={2}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => onReview(exec.id, reviewNotes || undefined, reviewRating || undefined)}
+                        className="bg-primary text-primary-foreground font-mono text-xs h-7"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Save Review
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProgramBuilder({
   open,
   onClose,
@@ -1509,6 +1905,28 @@ function ProgramBuilder({
     ]
   );
 
+  // Stable IDs for sortable steps (increment counter for new steps)
+  const [stepIdCounter, setStepIdCounter] = useState(() => initialProgram?.steps?.length || 1);
+  const [stepIds, setStepIds] = useState<string[]>(() =>
+    (initialProgram?.steps || [{ name: "Step 1" }]).map((_, i) => `step-${i}`)
+  );
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = stepIds.indexOf(String(active.id));
+    const newIndex = stepIds.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    setSteps(arrayMove(steps, oldIndex, newIndex));
+    setStepIds(arrayMove(stepIds, oldIndex, newIndex));
+  };
+
   // Reset when dialog opens with new initial
   useEffect(() => {
     if (open && initialProgram) {
@@ -1522,7 +1940,10 @@ function ProgramBuilder({
       setTags(initialProgram.tags?.join(", ") || "");
       setTips(initialProgram.tips?.join("\n") || "");
       setVariables(initialProgram.variables || []);
-      setSteps(initialProgram.steps || []);
+      const initSteps = initialProgram.steps || [];
+      setSteps(initSteps);
+      setStepIds(initSteps.map((_: ProgramStep, i: number) => `step-${i}`));
+      setStepIdCounter(initSteps.length);
       setWizardStep(0);
     } else if (open && !initialProgram) {
       setName("");
@@ -1530,6 +1951,8 @@ function ProgramBuilder({
       setCategory("beef");
       setMethod("smoke");
       setMeatCut("");
+      setStepIds(["step-0"]);
+      setStepIdCounter(1);
       setDifficulty("intermediate");
       setEstimatedTime("");
       setTags("");
@@ -1546,6 +1969,8 @@ function ProgramBuilder({
   }, [open, initialProgram]);
 
   const addStep = () => {
+    const newId = `step-${stepIdCounter}`;
+    setStepIdCounter(stepIdCounter + 1);
     setSteps([
       ...steps,
       {
@@ -1555,6 +1980,7 @@ function ProgramBuilder({
         actions: [],
       },
     ]);
+    setStepIds([...stepIds, newId]);
   };
 
   const updateStep = (index: number, step: ProgramStep) => {
@@ -1566,6 +1992,7 @@ function ProgramBuilder({
   const removeStep = (index: number) => {
     if (steps.length <= 1) { toast.error("Need at least one step"); return; }
     setSteps(steps.filter((_, i) => i !== index));
+    setStepIds(stepIds.filter((_, i) => i !== index));
   };
 
   const handleSave = () => {
@@ -1707,15 +2134,20 @@ function ProgramBuilder({
                 <Plus className="h-3 w-3 mr-1" />Add Step
               </Button>
             </div>
-            {steps.map((step, i) => (
-              <StepBuilder
-                key={i}
-                step={step}
-                index={i}
-                onChange={(s) => updateStep(i, s)}
-                onRemove={() => removeStep(i)}
-              />
-            ))}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
+                {steps.map((step, i) => (
+                  <SortableStepBuilder
+                    key={stepIds[i]}
+                    stepId={stepIds[i]}
+                    step={step}
+                    index={i}
+                    onChange={(s: ProgramStep) => updateStep(i, s)}
+                    onRemove={() => removeStep(i)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           </div>
         )}
 
@@ -1798,6 +2230,18 @@ export default function CookPrograms() {
     enabled: !!isAuthenticated,
   });
   const { data: communityTemplates } = trpc.customTemplates.community.useQuery();
+
+  // Execution history
+  const { data: executionHistory, refetch: refetchHistory } = trpc.executions.history.useQuery(
+    { limit: 50 },
+    { enabled: !!isAuthenticated }
+  );
+  const reviewExecution = trpc.executions.review.useMutation({
+    onSuccess: () => {
+      refetchHistory();
+      toast.success("Review saved!");
+    },
+  });
 
   // State
   const [activeTab, setActiveTab] = useState("library");
@@ -2176,6 +2620,13 @@ export default function CookPrograms() {
             <Users className="h-3.5 w-3.5 mr-1.5" />
             Community
           </TabsTrigger>
+          <TabsTrigger value="history" className="font-mono text-xs flex-1 sm:flex-none min-h-[40px]">
+            <History className="h-3.5 w-3.5 mr-1.5" />
+            History
+            {executionHistory && executionHistory.length > 0 && (
+              <Badge variant="outline" className="ml-1.5 text-[9px] font-mono">{executionHistory.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Library Tab */}
@@ -2353,6 +2804,15 @@ export default function CookPrograms() {
               </p>
             </div>
           )}
+        </TabsContent>
+
+        {/* History Tab */}
+        <TabsContent value="history" className="mt-4 space-y-3">
+          <ExecutionHistoryTab
+            executions={executionHistory ?? []}
+            onReview={(id, notes, rating) => reviewExecution.mutate({ id, notes, rating })}
+            isMobile={isMobile}
+          />
         </TabsContent>
       </Tabs>
 

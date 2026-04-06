@@ -26,6 +26,7 @@ import {
   meatProfilesRouter,
   automationRouter,
   analyticsRouter,
+  executionsRouter,
 } from "./routers/index";
 
 export const appRouter = router({
@@ -49,6 +50,7 @@ export const appRouter = router({
   meatProfiles: meatProfilesRouter,
   automation: automationRouter,
   analytics: analyticsRouter,
+  executions: executionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

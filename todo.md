@@ -336,3 +336,16 @@
 - [x] Clean up old CookGuide.tsx and Automation.tsx (kept as reference, routes redirect)
 - [x] Update Live Cook page to link back to Cook Programs instead of Cook Guide
 - [x] Write tests for unified page and builder (13 tests, 235 total pass)
+
+## Drag-to-Reorder Steps in Builder
+- [x] Install @dnd-kit library for accessible drag-and-drop
+- [x] Add drag handles to each step in the builder step list
+- [x] Implement sortable step list with visual drag feedback
+- [x] Update step indices on reorder
+
+## Program Execution History
+- [x] Create program_executions DB table (programId, cookSessionId, startedAt, endedAt, status, metrics JSON)
+- [x] Add server procedures for logging and querying execution history
+- [x] Build Execution History tab/section in Cook Programs page
+- [x] Link execution records to cook session data for post-cook analysis
+- [x] Show performance metrics (duration, peak temps, completion status)

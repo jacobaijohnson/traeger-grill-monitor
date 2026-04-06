@@ -169,3 +169,31 @@ export const customTemplates = mysqlTable("custom_templates", {
 
 export type CustomTemplate = typeof customTemplates.$inferSelect;
 export type InsertCustomTemplate = typeof customTemplates.$inferInsert;
+
+// Program execution history (tracks each run of an automation program)
+export const programExecutions = mysqlTable("program_executions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  automationProgramId: int("automationProgramId").notNull(),
+  programName: varchar("programName", { length: 128 }).notNull(),
+  programCategory: varchar("programCategory", { length: 32 }),
+  programMethod: varchar("programMethod", { length: 32 }),
+  programMeatCut: varchar("programMeatCut", { length: 128 }),
+  cookSessionId: int("cookSessionId"),                    // linked cook session (if any)
+  grillId: varchar("grillId", { length: 128 }),
+  variableValuesJson: json("variableValuesJson"),          // resolved variable values used
+  stepsCompleted: int("stepsCompleted").default(0).notNull(), // how many steps completed
+  totalSteps: int("totalSteps").default(0).notNull(),
+  outcome: varchar("outcome", { length: 16 }).default("running").notNull(), // running, completed, aborted, failed
+  peakGrillTemp: float("peakGrillTemp"),
+  peakProbeTemp: float("peakProbeTemp"),
+  executionLogJson: json("executionLogJson"),               // array of { timestamp, event, detail }
+  notes: text("notes"),
+  rating: int("rating"),                                    // 1-5 post-cook rating
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  endedAt: timestamp("endedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ProgramExecution = typeof programExecutions.$inferSelect;
+export type InsertProgramExecution = typeof programExecutions.$inferInsert;

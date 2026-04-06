@@ -74,6 +74,19 @@ export {
   type RatingDistribution,
 } from "./analytics";
 
+// Execution history
+export {
+  createProgramExecution,
+  getUserExecutionHistory,
+  getProgramExecution,
+  updateExecutionOutcome,
+  updateExecutionReview,
+  appendExecutionLog,
+  linkCookSession,
+  getExecutionsForProgram,
+  getActiveExecution,
+} from "./executions";
+
 // Pellet tracking
 export {
   insertPelletLog,

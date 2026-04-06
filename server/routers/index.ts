@@ -5,4 +5,5 @@ export { cookSessionRouter } from "./cook-session";
 export { templatesRouter, customTemplatesRouter, meatProfilesRouter } from "./templates";
 export { automationRouter } from "./automation";
 export { analyticsRouter } from "./analytics";
+export { executionsRouter } from "./executions";
 export { getValidIdToken, ensureMqttConnected } from "./helpers";

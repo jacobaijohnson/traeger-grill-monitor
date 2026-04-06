@@ -43,6 +43,13 @@
       "when": 1775491287885,
       "tag": "0005_known_gamora",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775500883997,
+      "tag": "0006_chief_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

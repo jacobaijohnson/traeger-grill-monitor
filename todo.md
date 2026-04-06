@@ -349,3 +349,15 @@
 - [x] Build Execution History tab/section in Cook Programs page
 - [x] Link execution records to cook session data for post-cook analysis
 - [x] Show performance metrics (duration, peak temps, completion status)
+
+## Execution Comparison View
+- [x] Add server procedure to fetch two executions with full details for comparison
+- [x] Build side-by-side comparison UI (duration, temps, steps, ratings, variables, outcomes)
+- [x] Add "Compare" selection mode in History tab (checkbox to select 2 runs, compare button)
+- [x] Show delta indicators (better/worse/same) for key metrics
+
+## Export Cook Log
+- [x] Add server endpoint to generate CSV from execution data (timeline, temps, events, notes)
+- [x] Add download button to individual execution cards in History tab
+- [x] Include metadata header in CSV (program name, date, outcome, rating)
+- [x] Include execution log entries, step transitions, and peak temps in CSV rows

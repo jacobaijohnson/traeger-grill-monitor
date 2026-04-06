@@ -78,6 +78,11 @@ import {
   CalendarDays,
   TrendingUp,
   ExternalLink,
+  Download,
+  ArrowUpDown,
+  Columns,
+  ArrowUp,
+  Minus,
 } from "lucide-react";
 import { useState, useMemo, useCallback, useEffect, Fragment, useId } from "react";
 import {
@@ -1537,6 +1542,14 @@ function ExecutionHistoryTab({
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewRating, setReviewRating] = useState(0);
 
+  // Compare mode
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<number[]>([]);
+  const [showCompareDialog, setShowCompareDialog] = useState(false);
+
+  // Export
+  const [exportingId, setExportingId] = useState<number | null>(null);
+
   const formatDate = (date: string | Date | null) => {
     if (!date) return "—";
     return new Date(date).toLocaleString(undefined, {
@@ -1603,6 +1616,45 @@ function ExecutionHistoryTab({
     );
   }
 
+  const toggleCompareSelect = (id: number) => {
+    setSelectedForCompare(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 2) return [prev[1], id]; // keep latest 2
+      return [...prev, id];
+    });
+  };
+
+  const handleExport = async (execId: number) => {
+    setExportingId(execId);
+    try {
+      // Fetch CSV from the server via tRPC — we'll call the query imperatively
+      const resp = await fetch(`/api/trpc/executions.exportCsv?input=${encodeURIComponent(JSON.stringify({ id: execId }))}`, {
+        credentials: "include",
+      });
+      const json = await resp.json();
+      const result = json?.result?.data;
+      if (!result?.csv) {
+        toast.error("Failed to generate export");
+        return;
+      }
+      // Trigger download
+      const blob = new Blob([result.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename || "cook-log.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Cook log exported!");
+    } catch {
+      toast.error("Export failed");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
   // Summary stats
   const totalRuns = executions.length;
   const completedRuns = executions.filter((e: any) => e.outcome === "completed").length;
@@ -1645,15 +1697,66 @@ function ExecutionHistoryTab({
         </Card>
       </div>
 
+      {/* Compare / Export Toolbar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={compareMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              setCompareMode(!compareMode);
+              setSelectedForCompare([]);
+            }}
+            className="font-mono text-xs h-7"
+          >
+            <Columns className="h-3 w-3 mr-1" />
+            {compareMode ? "Cancel Compare" : "Compare Runs"}
+          </Button>
+          {compareMode && selectedForCompare.length === 2 && (
+            <Button
+              size="sm"
+              onClick={() => setShowCompareDialog(true)}
+              className="bg-primary text-primary-foreground font-mono text-xs h-7"
+            >
+              <ArrowUpDown className="h-3 w-3 mr-1" />
+              Compare Selected
+            </Button>
+          )}
+          {compareMode && (
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {selectedForCompare.length}/2 selected
+            </span>
+          )}
+        </div>
+      </div>
+
       {/* Execution List */}
       <div className="space-y-2">
         {executions.map((exec: any) => (
-          <Collapsible key={exec.id} open={expandedId === exec.id} onOpenChange={() => handleExpand(exec)}>
-            <div className="rounded-lg border border-border bg-card overflow-hidden">
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-accent/30 transition-colors">
-                  {/* Outcome indicator */}
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${exec.outcome === "completed" ? "bg-green-400" : exec.outcome === "running" ? "bg-amber-400 animate-pulse" : "bg-red-400"}`} />
+          <Collapsible key={exec.id} open={expandedId === exec.id && !compareMode} onOpenChange={() => !compareMode && handleExpand(exec)}>
+            <div className={`rounded-lg border bg-card overflow-hidden ${
+              compareMode && selectedForCompare.includes(exec.id)
+                ? "border-primary ring-1 ring-primary/30"
+                : "border-border"
+            }`}>
+              <div
+                className="flex items-center gap-3 p-3 cursor-pointer hover:bg-accent/30 transition-colors"
+                onClick={() => compareMode ? toggleCompareSelect(exec.id) : handleExpand(exec)}
+              >
+                  {/* Compare checkbox or outcome indicator */}
+                  {compareMode ? (
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                      selectedForCompare.includes(exec.id)
+                        ? "bg-primary border-primary text-primary-foreground"
+                        : "border-muted-foreground/40"
+                    }`}>
+                      {selectedForCompare.includes(exec.id) && (
+                        <CheckCircle2 className="h-3 w-3" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${exec.outcome === "completed" ? "bg-green-400" : exec.outcome === "running" ? "bg-amber-400 animate-pulse" : "bg-red-400"}`} />
+                  )}
 
                   {/* Program info */}
                   <div className="flex-1 min-w-0">
@@ -1716,7 +1819,6 @@ function ExecutionHistoryTab({
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                 </div>
-              </CollapsibleTrigger>
 
               <CollapsibleContent>
                 <div className="px-3 pb-4 space-y-4 border-t border-border/50 pt-3">
@@ -1805,9 +1907,9 @@ function ExecutionHistoryTab({
                     </div>
                   )}
 
-                  {/* Cook Session Link */}
-                  {exec.cookSessionId && (
-                    <div className="flex items-center gap-2">
+                  {/* Actions Row: Cook Session Link + Export */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {exec.cookSessionId && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1817,8 +1919,18 @@ function ExecutionHistoryTab({
                         <ExternalLink className="h-3 w-3 mr-1" />
                         View Cook Session #{exec.cookSessionId}
                       </Button>
-                    </div>
-                  )}
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="font-mono text-xs h-7"
+                      onClick={() => handleExport(exec.id)}
+                      disabled={exportingId === exec.id}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      {exportingId === exec.id ? "Exporting..." : "Export CSV"}
+                    </Button>
+                  </div>
 
                   {/* Post-Cook Review */}
                   {exec.outcome !== "running" && (
@@ -1863,7 +1975,362 @@ function ExecutionHistoryTab({
           </Collapsible>
         ))}
       </div>
+
+      {/* Comparison Dialog */}
+      {showCompareDialog && selectedForCompare.length === 2 && (
+        <CompareDialog
+          idA={selectedForCompare[0]}
+          idB={selectedForCompare[1]}
+          open={showCompareDialog}
+          onClose={() => setShowCompareDialog(false)}
+          isMobile={isMobile}
+        />
+      )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// ─── COMPARE DIALOG ────────────────────────────────
+// ═══════════════════════════════════════════════════════
+
+function CompareDialog({
+  idA,
+  idB,
+  open,
+  onClose,
+  isMobile,
+}: {
+  idA: number;
+  idB: number;
+  open: boolean;
+  onClose: () => void;
+  isMobile: boolean;
+}) {
+  const { data: rawData, isLoading, error } = trpc.executions.compare.useQuery(
+    { idA, idB },
+    { enabled: open }
+  );
+
+  // Cast to concrete types so JSX doesn't see `unknown` from json columns
+  const data = rawData as {
+    execA: {
+      programName: string;
+      startedAt: string | Date;
+      endedAt: string | Date | null;
+      outcome: string;
+      stepsCompleted: number;
+      totalSteps: number;
+      peakGrillTemp: number | null;
+      peakProbeTemp: number | null;
+      rating: number | null;
+      notes: string | null;
+      variableValuesJson: Record<string, any> | null;
+      executionLogJson: Array<{ timestamp: number; event: string; detail?: string }> | null;
+      programCategory: string | null;
+      programMethod: string | null;
+      programMeatCut: string | null;
+    };
+    execB: {
+      programName: string;
+      startedAt: string | Date;
+      endedAt: string | Date | null;
+      outcome: string;
+      stepsCompleted: number;
+      totalSteps: number;
+      peakGrillTemp: number | null;
+      peakProbeTemp: number | null;
+      rating: number | null;
+      notes: string | null;
+      variableValuesJson: Record<string, any> | null;
+      executionLogJson: Array<{ timestamp: number; event: string; detail?: string }> | null;
+      programCategory: string | null;
+      programMethod: string | null;
+      programMeatCut: string | null;
+    };
+    deltas: {
+      durationMs: number | null;
+      peakGrillTemp: number | null;
+      peakProbeTemp: number | null;
+      stepsCompleted: number;
+      rating: number | null;
+    };
+  } | undefined;
+
+  const formatDate = (date: string | Date | null) => {
+    if (!date) return "\u2014";
+    return new Date(date).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatDurationMs = (ms: number | null) => {
+    if (ms == null) return "\u2014";
+    const abs = Math.abs(ms);
+    if (abs < 60000) return `${Math.round(abs / 1000)}s`;
+    if (abs < 3600000) return `${Math.round(abs / 60000)}min`;
+    const hrs = Math.floor(abs / 3600000);
+    const mins = Math.round((abs % 3600000) / 60000);
+    return `${hrs}h ${mins}m`;
+  };
+
+  const durationOf = (start: string | Date, end: string | Date | null) => {
+    if (!end) return null;
+    return new Date(end).getTime() - new Date(start).getTime();
+  };
+
+  const deltaIndicator = (delta: number | null, higherIsBetter = true) => {
+    if (delta == null) return <Minus className="h-3 w-3 text-muted-foreground" />;
+    if (delta === 0) return <Minus className="h-3 w-3 text-muted-foreground" />;
+    const isPositive = delta > 0;
+    const isGood = higherIsBetter ? isPositive : !isPositive;
+    return (
+      <span className={`flex items-center gap-0.5 text-xs font-mono ${
+        isGood ? "text-green-400" : "text-red-400"
+      }`}>
+        {isPositive ? "+" : ""}
+        {typeof delta === "number" && Math.abs(delta) > 1000
+          ? `${delta > 0 ? "+" : ""}${formatDurationMs(delta)}`
+          : delta.toFixed(delta % 1 === 0 ? 0 : 1)}
+      </span>
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className={`${isMobile ? "max-w-[95vw]" : "max-w-2xl"} max-h-[85vh] overflow-y-auto`}>
+        <DialogHeader>
+          <DialogTitle className="font-mono flex items-center gap-2">
+            <Columns className="h-5 w-5 text-primary" />
+            Execution Comparison
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground font-mono">
+            Side-by-side comparison of two program runs
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="py-12 text-center">
+            <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2" />
+            <p className="text-xs text-muted-foreground font-mono">Loading comparison...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="py-8 text-center">
+            <AlertTriangle className="h-6 w-6 text-red-400 mx-auto mb-2" />
+            <p className="text-xs text-red-400 font-mono">Failed to load comparison</p>
+          </div>
+        )}
+
+        {data && (
+          <div className="space-y-4">
+            {/* Header Row */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-secondary/50 rounded-lg p-3">
+                <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider mb-1">Run A</div>
+                <div className="text-sm font-semibold text-foreground truncate">{data.execA.programName}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{formatDate(data.execA.startedAt)}</div>
+              </div>
+              <div className="flex items-center justify-center">
+                <ArrowUpDown className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-3">
+                <div className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider mb-1">Run B</div>
+                <div className="text-sm font-semibold text-foreground truncate">{data.execB.programName}</div>
+                <div className="text-[10px] text-muted-foreground font-mono">{formatDate(data.execB.startedAt)}</div>
+              </div>
+            </div>
+
+            {/* Comparison Table */}
+            <div className="rounded-lg border border-border overflow-hidden">
+              <table className="w-full text-xs font-mono">
+                <thead>
+                  <tr className="bg-secondary/30">
+                    <th className="text-left p-2 text-muted-foreground font-medium">Metric</th>
+                    <th className="text-center p-2 text-muted-foreground font-medium">Run A</th>
+                    <th className="text-center p-2 text-muted-foreground font-medium">Run B</th>
+                    <th className="text-center p-2 text-muted-foreground font-medium">Delta</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {/* Outcome */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground">Outcome</td>
+                    <td className="p-2 text-center">
+                      <Badge variant="outline" className={`text-[9px] ${
+                        data.execA.outcome === "completed" ? "text-green-400 border-green-500/20" : "text-red-400 border-red-500/20"
+                      }`}>{data.execA.outcome}</Badge>
+                    </td>
+                    <td className="p-2 text-center">
+                      <Badge variant="outline" className={`text-[9px] ${
+                        data.execB.outcome === "completed" ? "text-green-400 border-green-500/20" : "text-red-400 border-red-500/20"
+                      }`}>{data.execB.outcome}</Badge>
+                    </td>
+                    <td className="p-2 text-center">
+                      {data.execA.outcome === data.execB.outcome
+                        ? <Minus className="h-3 w-3 text-muted-foreground mx-auto" />
+                        : <span className="text-amber-400">Changed</span>}
+                    </td>
+                  </tr>
+
+                  {/* Duration */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground">Duration</td>
+                    <td className="p-2 text-center text-foreground">
+                      {formatDurationMs(durationOf(data.execA.startedAt, data.execA.endedAt))}
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {formatDurationMs(durationOf(data.execB.startedAt, data.execB.endedAt))}
+                    </td>
+                    <td className="p-2 text-center">
+                      {deltaIndicator(data.deltas.durationMs, false)}
+                    </td>
+                  </tr>
+
+                  {/* Peak Grill Temp */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground flex items-center gap-1">
+                      <Flame className="h-3 w-3 text-orange-400" /> Peak Grill
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execA.peakGrillTemp != null ? `${Math.round(data.execA.peakGrillTemp)}\u00b0F` : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execB.peakGrillTemp != null ? `${Math.round(data.execB.peakGrillTemp)}\u00b0F` : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center">
+                      {deltaIndicator(data.deltas.peakGrillTemp, false)}
+                    </td>
+                  </tr>
+
+                  {/* Peak Probe Temp */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground flex items-center gap-1">
+                      <Thermometer className="h-3 w-3 text-red-400" /> Peak Probe
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execA.peakProbeTemp != null ? `${Math.round(data.execA.peakProbeTemp)}\u00b0F` : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execB.peakProbeTemp != null ? `${Math.round(data.execB.peakProbeTemp)}\u00b0F` : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center">
+                      {deltaIndicator(data.deltas.peakProbeTemp)}
+                    </td>
+                  </tr>
+
+                  {/* Steps Completed */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground">Steps Completed</td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execA.stepsCompleted}/{data.execA.totalSteps}
+                    </td>
+                    <td className="p-2 text-center text-foreground">
+                      {data.execB.stepsCompleted}/{data.execB.totalSteps}
+                    </td>
+                    <td className="p-2 text-center">
+                      {deltaIndicator(data.deltas.stepsCompleted)}
+                    </td>
+                  </tr>
+
+                  {/* Rating */}
+                  <tr>
+                    <td className="p-2 text-muted-foreground flex items-center gap-1">
+                      <Star className="h-3 w-3 text-amber-400" /> Rating
+                    </td>
+                    <td className="p-2 text-center">
+                      {data.execA.rating ? (
+                        <div className="flex items-center justify-center gap-0.5">
+                          {[1,2,3,4,5].map(s => (
+                            <Star key={s} className={`h-2.5 w-2.5 ${s <= (data.execA.rating ?? 0) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/20"}`} />
+                          ))}
+                        </div>
+                      ) : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center">
+                      {data.execB.rating ? (
+                        <div className="flex items-center justify-center gap-0.5">
+                          {[1,2,3,4,5].map(s => (
+                            <Star key={s} className={`h-2.5 w-2.5 ${s <= (data.execB.rating ?? 0) ? "text-amber-400 fill-amber-400" : "text-muted-foreground/20"}`} />
+                          ))}
+                        </div>
+                      ) : "\u2014"}
+                    </td>
+                    <td className="p-2 text-center">
+                      {deltaIndicator(data.deltas.rating)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Variable Comparison */}
+            {(data.execA.variableValuesJson || data.execB.variableValuesJson) && (
+              <div className="space-y-2">
+                <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Variable Values</div>
+                <div className="rounded-lg border border-border overflow-hidden">
+                  <table className="w-full text-xs font-mono">
+                    <thead>
+                      <tr className="bg-secondary/30">
+                        <th className="text-left p-2 text-muted-foreground font-medium">Variable</th>
+                        <th className="text-center p-2 text-muted-foreground font-medium">Run A</th>
+                        <th className="text-center p-2 text-muted-foreground font-medium">Run B</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {(() => {
+                        const varsA = (data.execA.variableValuesJson || {}) as Record<string, any>;
+                        const varsB = (data.execB.variableValuesJson || {}) as Record<string, any>;
+                        const allKeys = Array.from(new Set([...Object.keys(varsA), ...Object.keys(varsB)]));
+                        return allKeys.map(key => (
+                          <tr key={key}>
+                            <td className="p-2 text-muted-foreground">{key}</td>
+                            <td className={`p-2 text-center ${
+                              String(varsA[key] ?? "") !== String(varsB[key] ?? "") ? "text-amber-400" : "text-foreground"
+                            }`}>{String(varsA[key] ?? "\u2014")}</td>
+                            <td className={`p-2 text-center ${
+                              String(varsA[key] ?? "") !== String(varsB[key] ?? "") ? "text-amber-400" : "text-foreground"
+                            }`}>{String(varsB[key] ?? "\u2014")}</td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Notes Comparison */}
+            {(data.execA.notes || data.execB.notes) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Run A Notes</div>
+                  <div className="bg-secondary/30 rounded-lg p-2 text-xs text-foreground min-h-[40px]">
+                    {data.execA.notes || <span className="text-muted-foreground/50">No notes</span>}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Run B Notes</div>
+                  <div className="bg-secondary/30 rounded-lg p-2 text-xs text-foreground min-h-[40px]">
+                    {data.execB.notes || <span className="text-muted-foreground/50">No notes</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} className="font-mono text-xs">
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

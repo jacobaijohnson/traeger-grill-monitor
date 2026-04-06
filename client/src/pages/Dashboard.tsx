@@ -430,7 +430,7 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <CardContent>
-          {chartData.length > 1 ? (
+          {chartData.length > 0 || meatProfile ? (
             <TemperatureGraph
               data={chartData}
               meatProfile={meatProfile}

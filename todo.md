@@ -197,3 +197,4 @@
 - [x] Add session gap detection — identify contiguous vs. non-contiguous time segments
 - [x] Add visual breaks/gaps in TemperatureGraph when sessions are non-contiguous
 - [x] Add real time axis to graph showing actual clock time alongside elapsed
+- [x] Fix Dashboard markers dropdown: selecting a meat profile should immediately overlay reference lines on existing data, not wait for new data

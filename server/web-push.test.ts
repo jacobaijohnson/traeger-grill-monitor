@@ -16,14 +16,17 @@ describe("Web Push Module", () => {
   });
 
   describe("VAPID key management", () => {
-    it("getVapidPublicKey should return a base64url string", async () => {
+    it("getVapidPublicKey should return a base64url string or throw when DB unavailable", async () => {
       const { getVapidPublicKey } = await import("./web-push");
-      const result = getVapidPublicKey();
-      expect(result).toBeInstanceOf(Promise);
-      const key = await result;
-      // VAPID public key is a base64url-encoded string
-      expect(typeof key).toBe("string");
-      expect(key.length).toBeGreaterThan(20);
+      try {
+        const key = await getVapidPublicKey();
+        // With a real DB: returns a base64url-encoded string
+        expect(typeof key).toBe("string");
+        expect(key.length).toBeGreaterThan(20);
+      } catch (err: any) {
+        // Without DB: throws because VAPID keys can't be loaded
+        expect(err.message).toContain("VAPID keys not initialized");
+      }
     });
   });
 

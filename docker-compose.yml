@@ -13,7 +13,7 @@
 
 services:
   traeger:
-    image: ghcr.io/jacobj/traeger-grill-monitor:latest
+    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
     # Or build locally:
     # build:
     #   context: .

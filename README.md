@@ -72,7 +72,7 @@ If running behind a reverse proxy (Traefik, SWAG, Nginx Proxy Manager, Caddy), s
 ```yaml
 services:
   traeger:
-    image: ghcr.io/jacobj/traeger-grill-monitor:latest
+    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
     container_name: traeger-grill-monitor
     environment:
       - PUID=1000
@@ -133,7 +133,7 @@ docker run -d \
   -p 8420:8420 \
   -v /path/to/config:/config \
   --restart unless-stopped \
-  ghcr.io/jacobj/traeger-grill-monitor:latest
+  ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
 ```
 
 ### Using an existing MySQL/MariaDB instance
@@ -262,7 +262,7 @@ id your_user
 
 ## Database Schema
 
-The application manages 14 tables across four domains:
+The application manages 17 tables across five domains:
 
 **Authentication** (managed by Better Auth): `user`, `session`, `account`, `verification`
 
@@ -281,7 +281,7 @@ Migrations are applied automatically on startup via Drizzle. Migration files are
 ## Building Locally
 
 ```bash
-git clone https://github.com/jacobj/traeger-grill-monitor.git
+git clone https://github.com/jacobaijohnson/traeger-grill-monitor.git
 cd traeger-grill-monitor
 
 # Build the Docker image
@@ -303,7 +303,7 @@ pnpm install
 # Start dev server (Express + Vite HMR)
 pnpm dev
 
-# Run tests (335 tests across 13 files)
+# Run tests (422 tests across 15 files)
 pnpm test
 
 # Type check
@@ -321,19 +321,22 @@ pnpm drizzle-kit generate
 ```
 client/src/
   pages/           Dashboard, LiveCook, History, Analytics, CookPrograms,
-                   Controls, Settings, AdminSettings, Login, Register
+                   Controls, Settings, AdminSettings, Login, Register,
+                   ForgotPassword, ResetPassword, NotFound
   components/      DashboardLayout, CookConfigurator, shadcn/ui
   lib/             tRPC client, auth client, utilities
 
 server/
   routers/         tRPC procedures (admin, analytics, automation, cook-session,
-                   executions, grill, live-cook, templates, traeger)
-  db/              Drizzle query helpers (access-control, analytics, cook-sessions,
-                   executions, pellet, telemetry, templates, traeger-sessions)
+                   executions, grill, live-cook, push, templates, traeger)
+  db/              Drizzle query helpers (access-control, analytics, connection,
+                   cook-sessions, executions, pellet, telemetry, templates,
+                   traeger-sessions)
   mqtt-manager.ts  Per-user MQTT connection lifecycle
   sse.ts           Server-Sent Events hub
   web-push.ts      VAPID key management and push delivery
   crypto.ts        AES-256-GCM encryption for stored tokens
+  logger.ts        Structured pino logging with child loggers
   _core/           Framework plumbing (auth, context, vite bridge)
 
 drizzle/           Schema and migration SQL files
@@ -460,10 +463,11 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 ## Versions
 
-| Date | Description |
-|------|-------------|
-| 2025-04-07 | Enterprise hardening: structured logging (pino), health/metrics/version endpoints, graceful shutdown, rate limiting, input validation bounds, lazy loading, Docker HEALTHCHECK, stale session reaper, telemetry purge, 4 new DB indexes, log aggregation stack |
-| 2025-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Web Push notifications, Docker/LSIO |
+| Version | Date | Description |
+|---------|------|-------------|
+| v0.2.0 | 2026-04-07 | Documentation audit, Dependabot, CI fixes, graceful DB degradation, stale reference cleanup |
+| v0.1.1 | 2026-04-07 | Enterprise hardening: structured logging (pino), health/metrics/version endpoints, graceful shutdown, rate limiting, input validation bounds, lazy loading, Docker HEALTHCHECK, stale session reaper, telemetry purge, 4 new DB indexes, log aggregation stack |
+| v0.1.0 | 2026-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Web Push notifications, Docker/LSIO |
 
 ---
 

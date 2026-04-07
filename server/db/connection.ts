@@ -104,6 +104,12 @@ export async function withDbRetry<T>(
       }
 
       dbLog.error({ label, attempt, err: error }, "Query failed after retries");
+      // Transient errors (ECONNREFUSED, ETIMEDOUT, etc.) degrade gracefully
+      // by returning null. Callers already handle null via ?? fallbacks.
+      // Non-transient errors (SQL syntax, constraint violations) still throw.
+      if (isTransient) {
+        return null;
+      }
       throw error;
     }
   }

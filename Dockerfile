@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# ─── Traeger Smoker Insight — LinuxServer.io Compatible ───
+# ─── Traeger Grill Monitor — LinuxServer.io Compatible ───
 # Default port: 8420 (IANA unassigned, no homelab conflicts)
 
 # ─── Stage 1: Build client + server ──────────────────────
@@ -36,11 +36,11 @@ FROM ghcr.io/linuxserver/baseimage-alpine:3.21
 # Set version labels (LSIO convention)
 ARG BUILD_DATE
 ARG VERSION
-LABEL build_version="traeger-smoker-insight version:- ${VERSION} Build-date:- ${BUILD_DATE}"
-LABEL maintainer="jacobj"
-LABEL org.opencontainers.image.title="Traeger Smoker Insight"
+LABEL build_version="traeger-grill-monitor version:- ${VERSION} Build-date:- ${BUILD_DATE}"
+LABEL maintainer="jacobaijohnson"
+LABEL org.opencontainers.image.title="Traeger Grill Monitor"
 LABEL org.opencontainers.image.description="Real-time Traeger grill monitoring dashboard with cook tracking, pellet consumption, and multi-grill support"
-LABEL org.opencontainers.image.source="https://github.com/jacobj/traeger-smoker-insight"
+LABEL org.opencontainers.image.source="https://github.com/jacobaijohnson/traeger-grill-monitor"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Environment defaults

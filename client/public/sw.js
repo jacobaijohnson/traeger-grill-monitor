@@ -1,7 +1,7 @@
 // Traeger Grill Monitor - Service Worker
 // Handles background notifications, offline caching, and persistent alarm audio
 
-const CACHE_NAME = 'smoker-insight-v2';
+const CACHE_NAME = 'grill-monitor-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

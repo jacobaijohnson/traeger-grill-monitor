@@ -15,11 +15,14 @@ describe("RC-1: DB connection resilience", () => {
     expect(result).toBe("ok");
   });
 
-  it("withDbRetry should throw after exhausting all retries on transient error", async () => {
+  it("withDbRetry should return null after exhausting all retries on transient error", async () => {
     const { withDbRetry } = await import("./db/connection");
     // MAX_RETRIES is hardcoded to 2 (initial + 1 retry = 2 attempts)
+    // Transient errors (ECONNRESET, ECONNREFUSED, etc.) degrade gracefully
+    // by returning null after all retries are exhausted.
     const err = Object.assign(new Error("ECONNRESET"), { code: "ECONNRESET" });
-    await expect(withDbRetry(async () => { throw err; }, "test-retry")).rejects.toThrow("ECONNRESET");
+    const result = await withDbRetry(async () => { throw err; }, "test-retry");
+    expect(result).toBeNull();
   });
 
   it("withDbRetry should NOT retry on non-transient errors", async () => {

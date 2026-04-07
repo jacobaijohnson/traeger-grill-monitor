@@ -17,7 +17,7 @@ Thank you for your interest in contributing. This guide covers how to set up a d
 
 ```bash
 # Clone the repository
-git clone https://github.com/jacobj/traeger-grill-monitor.git
+git clone https://github.com/jacobaijohnson/traeger-grill-monitor.git
 cd traeger-grill-monitor
 
 # Install dependencies
@@ -27,8 +27,8 @@ pnpm install
 docker compose up mysql -d
 
 # Set environment variables
-cp env.example .env
-# Edit .env with your values (at minimum: JWT_SECRET, DATABASE_URL)
+cp ENV_TEMPLATE.md .env.reference  # Review for required variables
+# Create .env with your values (at minimum: JWT_SECRET, DATABASE_URL)
 
 # Start the dev server
 pnpm dev
@@ -37,10 +37,10 @@ pnpm dev
 pnpm test
 
 # Type check
-pnpm tsc --noEmit
+npx tsc --noEmit
 ```
 
-The dev server starts at `http://localhost:3000` with hot module replacement.
+The dev server starts at `http://localhost:8420` (production port) or `http://localhost:3000` (Vite dev mode) with hot module replacement.
 
 ---
 
@@ -103,7 +103,7 @@ docs: update reverse proxy configuration examples
 
 1. Ensure all checks pass locally:
    ```bash
-   pnpm tsc --noEmit  # TypeScript
+   npx tsc --noEmit  # TypeScript
    pnpm test           # Tests
    docker build .      # Docker build (optional but recommended)
    ```

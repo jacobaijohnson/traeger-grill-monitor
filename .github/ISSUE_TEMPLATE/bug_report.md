@@ -27,7 +27,7 @@ What actually happened.
 ## Environment
 
 - **Deployment**: Docker / Manual
-- **Docker image tag**: (e.g., `v0.1.0`, `latest`)
+- **Docker image tag**: (e.g., `v0.2.0`, `latest`)
 - **Host OS**: (e.g., Ubuntu 24.04, Unraid 7.0)
 - **Browser**: (e.g., Chrome 130, Safari 18)
 - **Grill model**: (e.g., Ironwood 885, Pro 780)

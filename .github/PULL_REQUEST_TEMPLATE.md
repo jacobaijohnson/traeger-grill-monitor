@@ -18,7 +18,7 @@ Closes #
 ## Pre-Merge Checklist
 
 ### Code Quality
-- [ ] TypeScript compiles with zero errors (`pnpm tsc --noEmit`)
+- [ ] TypeScript compiles with zero errors (`npx tsc --noEmit`)
 - [ ] All tests pass (`pnpm test`)
 - [ ] No new `console.log` calls (use structured pino logger)
 - [ ] No unbounded `z.string()` or `z.number()` inputs
@@ -35,7 +35,7 @@ Closes #
 
 ### Documentation
 - [ ] README updated if user-facing behavior changed
-- [ ] New environment variables documented in `env.example`
+- [ ] New environment variables documented in `ENV_TEMPLATE.md`
 
 ## Screenshots
 

@@ -16,7 +16,7 @@ If you discover a security vulnerability in Traeger Grill Monitor, please report
 Instead, please:
 
 1. Email the maintainer directly (see GitHub profile for contact info)
-2. Or use [GitHub's private vulnerability reporting](https://github.com/jacobj/traeger-grill-monitor/security/advisories/new)
+2. Or use [GitHub's private vulnerability reporting](https://github.com/jacobaijohnson/traeger-grill-monitor/security/advisories/new)
 
 ### What to Include
 

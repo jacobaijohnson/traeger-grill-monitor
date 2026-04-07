@@ -76,7 +76,7 @@ export default function Register() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
-              Smoker Insight
+              Grill Monitor
             </h1>
             <p className="text-xs text-muted-foreground font-mono tracking-wider uppercase mt-1">
               Traeger Grill Command
@@ -88,7 +88,7 @@ export default function Register() {
           <CardHeader className="pb-4">
             <CardTitle className="text-lg">Create account</CardTitle>
             <CardDescription>
-              Set up your Smoker Insight dashboard account.
+              Set up your Grill Monitor dashboard account.
             </CardDescription>
           </CardHeader>
           <CardContent>

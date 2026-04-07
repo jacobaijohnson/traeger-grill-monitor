@@ -61,7 +61,7 @@ export default function ResetPassword() {
               <Flame className="h-5 w-5 text-primary" />
             </div>
             <span className="text-lg font-bold text-foreground tracking-tight">
-              Traeger Smoker Insight
+              Traeger Grill Monitor
             </span>
           </div>
           <Card className="bg-card border-border">
@@ -94,7 +94,7 @@ export default function ResetPassword() {
             <Flame className="h-5 w-5 text-primary" />
           </div>
           <span className="text-lg font-bold text-foreground tracking-tight">
-            Traeger Smoker Insight
+            Traeger Grill Monitor
           </span>
         </div>
 

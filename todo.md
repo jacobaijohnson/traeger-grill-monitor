@@ -610,3 +610,6 @@
 - [x] Add express-rate-limit: 4-tier rate limiting (auth 20/min, login 5/min, admin 30/min, API 200/min)
 - [x] Add log aggregation: docker-compose.logging.yml overlay with Grafana + Loki + Promtail
 - [x] 422 tests passing across 15 test files
+
+## Project Rename
+- [x] Rename all references from traeger-smoker-insight to traeger-grill-monitor (114 replacements across 22 files)

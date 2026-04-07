@@ -1,4 +1,4 @@
-# Traeger Smoker Insight — Enterprise Hardening Audit
+# Traeger Grill Monitor — Enterprise Hardening Audit
 
 **Date:** 2026-04-06 (Updated: 2026-04-07)  
 **Codebase:** ~12,000 LOC server, ~11,600 LOC client, 402 tests across 15 files  

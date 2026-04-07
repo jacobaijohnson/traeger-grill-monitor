@@ -86,14 +86,14 @@ export default function DashboardLayout({
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-4">
-            {/* Traeger Smoker Insight Logo */}
+            {/* Traeger Grill Monitor Logo */}
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center">
                 <Gauge className="h-7 w-7 text-primary" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
-                  Smoker Insight
+                  Grill Monitor
                 </h1>
                 <p className="text-xs text-muted-foreground font-mono tracking-wider uppercase">
                   Traeger Grill Command
@@ -260,7 +260,7 @@ function DashboardLayoutContent({
                 <div className="flex items-center gap-2 min-w-0">
                   <Gauge className="h-5 w-5 text-primary shrink-0" />
                   <span className="font-semibold tracking-tight truncate text-foreground font-mono text-sm">
-                    Smoker Insight
+                    Grill Monitor
                   </span>
                 </div>
               ) : null}

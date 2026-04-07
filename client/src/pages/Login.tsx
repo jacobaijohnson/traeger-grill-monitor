@@ -59,7 +59,7 @@ export default function Login() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground font-mono">
-              Smoker Insight
+              Grill Monitor
             </h1>
             <p className="text-xs text-muted-foreground font-mono tracking-wider uppercase mt-1">
               Traeger Grill Command

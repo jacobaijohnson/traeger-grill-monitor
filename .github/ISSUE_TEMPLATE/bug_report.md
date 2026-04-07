@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug to help improve Traeger Smoker Insight
+about: Report a bug to help improve Traeger Grill Monitor
 title: '[Bug] '
 labels: bug
 assignees: ''
@@ -38,7 +38,7 @@ What actually happened.
 <summary>Docker logs</summary>
 
 ```
-Paste output of: docker logs traeger-smoker-insight --tail 50
+Paste output of: docker logs traeger-grill-monitor --tail 50
 ```
 
 </details>

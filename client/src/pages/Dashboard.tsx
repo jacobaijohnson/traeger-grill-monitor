@@ -178,7 +178,7 @@ export default function Dashboard() {
             <div className="inline-flex items-center justify-center h-16 w-16 rounded-xl bg-primary/10 border border-primary/20 mb-4">
               <Gauge className="h-9 w-9 text-primary" />
             </div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to Smoker Insight</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to Grill Monitor</h2>
             <p className="text-muted-foreground mb-6 text-sm max-w-sm mx-auto">
               Connect your grill account in Settings to unlock live telemetry, remote controls, and cook automation.
             </p>

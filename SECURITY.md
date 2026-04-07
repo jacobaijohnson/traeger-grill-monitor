@@ -9,14 +9,14 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Traeger Smoker Insight, please report it responsibly.
+If you discover a security vulnerability in Traeger Grill Monitor, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
 Instead, please:
 
 1. Email the maintainer directly (see GitHub profile for contact info)
-2. Or use [GitHub's private vulnerability reporting](https://github.com/jacobj/traeger-smoker-insight/security/advisories/new)
+2. Or use [GitHub's private vulnerability reporting](https://github.com/jacobj/traeger-grill-monitor/security/advisories/new)
 
 ### What to Include
 

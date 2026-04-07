@@ -1,6 +1,6 @@
 # Data Sensitivity Classification Report
 
-**Project:** Traeger Smoker Insight
+**Project:** Traeger Grill Monitor
 **Classification:** DSS-1 (Public / Non-Sensitive)
 **Audit Date:** April 6, 2026
 **Auditor:** Manus AI (automated scan + manual review)
@@ -9,7 +9,7 @@
 
 ## 1. Classification Rationale
 
-Traeger Smoker Insight is a personal IoT dashboard for monitoring and controlling Traeger pellet grills. Every component of the application — its source code, data model, business logic, external integrations, and reference data — is derived entirely from publicly available information, open-source libraries, and standard internet protocols. No Meta internal data, proprietary code, internal tool references, or employee-specific information exists in the application codebase or its data flows.
+Traeger Grill Monitor is a personal IoT dashboard for monitoring and controlling Traeger pellet grills. Every component of the application — its source code, data model, business logic, external integrations, and reference data — is derived entirely from publicly available information, open-source libraries, and standard internet protocols. No Meta internal data, proprietary code, internal tool references, or employee-specific information exists in the application codebase or its data flows.
 
 This project qualifies as **DSS-1** because it contains no data that, if disclosed, would cause harm to any individual, organization, or system beyond what is already publicly accessible.
 

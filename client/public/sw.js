@@ -1,4 +1,4 @@
-// Traeger Smoker Insight - Service Worker
+// Traeger Grill Monitor - Service Worker
 // Handles background notifications, offline caching, and persistent alarm audio
 
 const CACHE_NAME = 'smoker-insight-v2';
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
 // ─── Push Notification Handler ─────────────────────────
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'Smoker Insight', body: 'Alert from your grill' };
+  let data = { title: 'Grill Monitor', body: 'Alert from your grill' };
 
   if (event.data) {
     try {

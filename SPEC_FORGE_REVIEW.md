@@ -1,4 +1,4 @@
-# Spec Forge Review: Traeger Smoker Insight
+# Spec Forge Review: Traeger Grill Monitor
 
 **Tier**: Complex | **Date**: April 5, 2026 | **Reviewer**: Manus AI
 **Project**: traeger-dashboard | **Version**: 3ef2b379 | **Stack**: React 19 + Tailwind 4 + Express 4 + tRPC 11
@@ -7,7 +7,7 @@
 
 ## 1. System Identity
 
-Traeger Smoker Insight is a personal IoT dashboard for monitoring and controlling Traeger pellet grills via the unofficial Traeger API. It acts as a proxy between the user's browser and Traeger's cloud infrastructure (Cognito auth, MQTT telemetry, REST command API), adding cook intelligence, session tracking, analytics, and a comprehensive meat science reference library.
+Traeger Grill Monitor is a personal IoT dashboard for monitoring and controlling Traeger pellet grills via the unofficial Traeger API. It acts as a proxy between the user's browser and Traeger's cloud infrastructure (Cognito auth, MQTT telemetry, REST command API), adding cook intelligence, session tracking, analytics, and a comprehensive meat science reference library.
 
 The application is designed for a single authenticated owner who connects their Traeger credentials, selects a grill, and gains real-time telemetry, grill control, guided cook workflows, and historical analytics — all through a PWA-capable web interface.
 
@@ -379,7 +379,7 @@ Based on the implemented feature set, the following requirements are reverse-eng
 
 ## 11. Conclusion
 
-Traeger Smoker Insight is a well-built personal IoT dashboard with an impressive feature set for its development timeline. The codebase is organized, the data model is sound, and the user experience covers the full cook lifecycle from template selection through live monitoring to historical analytics.
+Traeger Grill Monitor is a well-built personal IoT dashboard with an impressive feature set for its development timeline. The codebase is organized, the data model is sound, and the user experience covers the full cook lifecycle from template selection through live monitoring to historical analytics.
 
 The primary areas for improvement are: (1) closing the security gap in session ownership checks, (2) hardening the Traeger API integration with retry logic and response validation, (3) expanding test coverage from data-validation-only to include integration and state-machine tests, and (4) splitting the two largest files (`routers.ts` and `db.ts`) for maintainability.
 

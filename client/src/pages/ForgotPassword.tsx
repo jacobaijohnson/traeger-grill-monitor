@@ -40,7 +40,7 @@ export default function ForgotPassword() {
             <Flame className="h-5 w-5 text-primary" />
           </div>
           <span className="text-lg font-bold text-foreground tracking-tight">
-            Traeger Smoker Insight
+            Traeger Grill Monitor
           </span>
         </div>
 
@@ -77,7 +77,7 @@ export default function ForgotPassword() {
                     Ask your server admin to check the logs with:
                   </p>
                   <code className="block text-xs font-mono bg-background p-2 rounded border border-border text-foreground">
-                    docker logs traeger-smoker-insight
+                    docker logs traeger-grill-monitor
                   </code>
                   <p className="text-xs text-muted-foreground">
                     The admin will find a boxed reset URL they can share with you.

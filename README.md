@@ -1,4 +1,4 @@
-# Traeger Smoker Insight
+# Traeger Grill Monitor
 
 Real-time monitoring dashboard for Traeger grills. Track temperatures, manage cook sessions, log pellet consumption, and automate multi-step cook programs — all from a self-hosted web interface.
 
@@ -58,8 +58,8 @@ If running behind a reverse proxy (Traefik, SWAG, Nginx Proxy Manager, Caddy), s
 ```yaml
 services:
   traeger:
-    image: ghcr.io/jacobj/traeger-smoker-insight:latest
-    container_name: traeger-smoker-insight
+    image: ghcr.io/jacobj/traeger-grill-monitor:latest
+    container_name: traeger-grill-monitor
     environment:
       - PUID=1000
       - PGID=1000
@@ -105,7 +105,7 @@ volumes:
 
 ```bash
 docker run -d \
-  --name=traeger-smoker-insight \
+  --name=traeger-grill-monitor \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=America/New_York \
@@ -119,7 +119,7 @@ docker run -d \
   -p 8420:8420 \
   -v /path/to/config:/config \
   --restart unless-stopped \
-  ghcr.io/jacobj/traeger-smoker-insight:latest
+  ghcr.io/jacobj/traeger-grill-monitor:latest
 ```
 
 ### Using an existing MySQL/MariaDB instance
@@ -267,11 +267,11 @@ Migrations are applied automatically on startup via Drizzle. Migration files are
 ## Building Locally
 
 ```bash
-git clone https://github.com/jacobj/traeger-smoker-insight.git
-cd traeger-smoker-insight
+git clone https://github.com/jacobj/traeger-grill-monitor.git
+cd traeger-grill-monitor
 
 # Build the Docker image
-docker build -t traeger-smoker-insight:local .
+docker build -t traeger-grill-monitor:local .
 
 # Or run in development mode (requires Node.js 22+)
 pnpm install
@@ -356,12 +356,12 @@ labels:
   - "traefik.http.services.traeger.loadbalancer.server.port=8420"
 ```
 
-**Nginx Proxy Manager**: Point a proxy host to `traeger-smoker-insight:8420` with WebSocket support enabled (required for SSE).
+**Nginx Proxy Manager**: Point a proxy host to `traeger-grill-monitor:8420` with WebSocket support enabled (required for SSE).
 
 **SWAG / Nginx**:
 ```nginx
 location / {
-    proxy_pass http://traeger-smoker-insight:8420;
+    proxy_pass http://traeger-grill-monitor:8420;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -428,19 +428,19 @@ Example LogQL queries in Grafana:
 
 ```logql
 # All MQTT module logs
-{container_name="traeger-smoker-insight"} | json | module="mqtt"
+{container_name="traeger-grill-monitor"} | json | module="mqtt"
 
 # All errors
-{container_name="traeger-smoker-insight"} | json | level="error"
+{container_name="traeger-grill-monitor"} | json | level="error"
 
 # Alarm events
-{container_name="traeger-smoker-insight"} | json | module="alarm"
+{container_name="traeger-grill-monitor"} | json | module="alarm"
 
 # Error rate over 5 minutes
-rate({container_name="traeger-smoker-insight"} | json | level="error" [5m])
+rate({container_name="traeger-grill-monitor"} | json | level="error" [5m])
 ```
 
-If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect stdout from the `traeger-smoker-insight` container. The JSON format is compatible with any pino-aware log parser.
+If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect stdout from the `traeger-grill-monitor` container. The JSON format is compatible with any pino-aware log parser.
 
 ---
 

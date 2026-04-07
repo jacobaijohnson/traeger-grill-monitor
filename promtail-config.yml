@@ -1,4 +1,4 @@
-# Promtail configuration for Traeger Smoker Insight
+# Promtail configuration for Traeger Grill Monitor
 # Collects Docker container logs and ships to Loki
 
 server:
@@ -31,7 +31,7 @@ scrape_configs:
     pipeline_stages:
       # Parse JSON logs from traeger app (pino format)
       - match:
-          selector: '{container_name="traeger-smoker-insight"}'
+          selector: '{container_name="traeger-grill-monitor"}'
           stages:
             - json:
                 expressions:

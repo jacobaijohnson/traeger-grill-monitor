@@ -1,6 +1,6 @@
 {
-  "name": "Traeger Smoker Insight",
-  "short_name": "Smoker Insight",
+  "name": "Traeger Grill Monitor",
+  "short_name": "Grill Monitor",
   "description": "Live telemetry, controls, and cook automation for your Traeger grill",
   "start_url": "/",
   "display": "standalone",

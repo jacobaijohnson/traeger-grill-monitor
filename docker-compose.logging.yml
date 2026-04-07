@@ -1,4 +1,4 @@
-# ─── Traeger Smoker Insight — Log Aggregation Overlay ─────
+# ─── Traeger Grill Monitor — Log Aggregation Overlay ─────
 #
 # Optional Grafana + Loki + Promtail stack for structured log aggregation.
 # Traeger already outputs pino JSON logs to stdout in production.
@@ -18,10 +18,10 @@
 #   - JSON log fields (module, userId, grillId, etc.) queryable via LogQL
 #
 # Example LogQL queries:
-#   {container_name="traeger-smoker-insight"} | json | module="mqtt"
-#   {container_name="traeger-smoker-insight"} | json | level="error"
-#   {container_name="traeger-smoker-insight"} | json | module="alarm"
-#   rate({container_name="traeger-smoker-insight"} | json | level="error" [5m])
+#   {container_name="traeger-grill-monitor"} | json | module="mqtt"
+#   {container_name="traeger-grill-monitor"} | json | level="error"
+#   {container_name="traeger-grill-monitor"} | json | module="alarm"
+#   rate({container_name="traeger-grill-monitor"} | json | level="error" [5m])
 
 services:
   # ─── Loki: Log storage and query engine ────────────────

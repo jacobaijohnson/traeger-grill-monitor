@@ -1,4 +1,4 @@
-# ─── Traeger Smoker Insight — Docker Compose ─────────────
+# ─── Traeger Grill Monitor — Docker Compose ─────────────
 #
 # Default port: 8420 (IANA unassigned, no homelab conflicts)
 #
@@ -13,12 +13,12 @@
 
 services:
   traeger:
-    image: ghcr.io/jacobj/traeger-smoker-insight:latest
+    image: ghcr.io/jacobj/traeger-grill-monitor:latest
     # Or build locally:
     # build:
     #   context: .
     #   dockerfile: Dockerfile
-    container_name: traeger-smoker-insight
+    container_name: traeger-grill-monitor
     ports:
       - "8420:8420"
     environment:

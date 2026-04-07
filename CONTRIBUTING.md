@@ -1,4 +1,4 @@
-# Contributing to Traeger Smoker Insight
+# Contributing to Traeger Grill Monitor
 
 Thank you for your interest in contributing. This guide covers how to set up a development environment, submit changes, and what to expect during review.
 
@@ -17,8 +17,8 @@ Thank you for your interest in contributing. This guide covers how to set up a d
 
 ```bash
 # Clone the repository
-git clone https://github.com/jacobj/traeger-smoker-insight.git
-cd traeger-smoker-insight
+git clone https://github.com/jacobj/traeger-grill-monitor.git
+cd traeger-grill-monitor
 
 # Install dependencies
 pnpm install
@@ -127,7 +127,7 @@ docs: update reverse proxy configuration examples
 
 - Use the **Bug Report** template for bugs
 - Use the **Feature Request** template for new ideas
-- Include Docker logs (`docker logs traeger-smoker-insight`) for runtime issues
+- Include Docker logs (`docker logs traeger-grill-monitor`) for runtime issues
 - Include browser console output for frontend issues
 
 ---

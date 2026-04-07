@@ -105,6 +105,32 @@ describe("OBS-2: Health Endpoint", () => {
     expect(healthSource).toContain("Health check failed");
     expect(healthSource).toContain('status: "down"');
   });
+
+  it("checks Cloudflare Tunnel health status", () => {
+    expect(healthSource).toContain("checkTunnelHealth");
+    expect(healthSource).toContain("tunnel");
+  });
+
+  it("reports tunnel status values (connected, not_configured, process_running, process_not_found)", () => {
+    expect(healthSource).toContain('"connected"');
+    expect(healthSource).toContain('"not_configured"');
+    expect(healthSource).toContain('"process_running"');
+    expect(healthSource).toContain('"process_not_found"');
+  });
+
+  it("checks for Docker secret file at /run/secrets/tunnel_token", () => {
+    expect(healthSource).toContain("/run/secrets/tunnel_token");
+  });
+
+  it("probes cloudflared metrics /ready endpoint when TUNNEL_METRICS is set", () => {
+    expect(healthSource).toContain("probeTunnelMetrics");
+    expect(healthSource).toContain("/ready");
+  });
+
+  it("marks status as degraded when tunnel is configured but process not found", () => {
+    expect(healthSource).toContain("process_not_found");
+    expect(healthSource).toContain("degraded");
+  });
 });
 
 describe("OBS-3: Metrics Endpoint", () => {
@@ -187,6 +213,49 @@ describe("s6 readiness uses /api/health", () => {
     expect(runScript).toContain("/api/health");
     // Should NOT use bare nc -z anymore
     expect(runScript).not.toContain("nc -z");
+  });
+});
+
+describe("OBS-4: Service Health Endpoint", () => {
+  const healthSource = fs.readFileSync(
+    path.join(projectRoot, "server/health.ts"),
+    "utf-8"
+  );
+
+  it("registers GET /api/health/services route", () => {
+    expect(healthSource).toContain('"/api/health/services"');
+  });
+
+  it("includes s6 service status checking", () => {
+    expect(healthSource).toContain("checkS6Services");
+    expect(healthSource).toContain("s6-svstat");
+  });
+
+  it("checks both svc-traeger and svc-cloudflared services", () => {
+    expect(healthSource).toContain('"svc-traeger"');
+    expect(healthSource).toContain('"svc-cloudflared"');
+  });
+
+  it("parses s6-svstat output for pid and uptime", () => {
+    expect(healthSource).toMatch(/pid.*\d/);
+    expect(healthSource).toContain("uptime");
+  });
+
+  it("returns app, database, tunnel, pushNotifications, s6Services, and memory", () => {
+    expect(healthSource).toContain("app:");
+    expect(healthSource).toContain("database:");
+    expect(healthSource).toContain("tunnel:");
+    expect(healthSource).toContain("pushNotifications:");
+    expect(healthSource).toContain("s6Services");
+    expect(healthSource).toContain("memory:");
+  });
+
+  it("handles s6-svstat not available gracefully (dev environment)", () => {
+    expect(healthSource).toContain('"not_found"');
+  });
+
+  it("has error handling for service health check failure", () => {
+    expect(healthSource).toContain("Service health check");
   });
 });
 

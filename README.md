@@ -69,6 +69,47 @@ If running behind a reverse proxy (Traefik, SWAG, Nginx Proxy Manager, Caddy), s
 
 ### docker-compose (recommended)
 
+Create a directory for your deployment and add two files: `docker-compose.yml` and a `.env` file containing your secrets. Docker Compose automatically reads the `.env` file from the same directory as `docker-compose.yml`.
+
+**File structure:**
+
+```
+traeger/
+├── docker-compose.yml
+├── .env                 ← secrets go here (never commit this file)
+└── config/              ← created automatically on first run
+```
+
+**`.env` file** (create this in the same directory as `docker-compose.yml`):
+
+```env
+# ─── Required ─────────────────────────────────────────────
+JWT_SECRET=your-random-64-char-string-here          # openssl rand -hex 32
+MYSQL_ROOT_PASSWORD=change-me-root                  # MySQL root password
+MYSQL_PASSWORD=change-me-traeger                    # MySQL app user password
+DATABASE_URL=mysql://traeger:change-me-traeger@mysql:3306/traeger_dashboard
+
+# ─── Recommended ──────────────────────────────────────────
+BETTER_AUTH_URL=http://192.168.1.100:8420           # your LAN IP or domain
+TZ=America/New_York                                 # your timezone
+
+# ─── Admin Bootstrap (remove after first login) ──────────
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your-secure-password-min-8-chars
+
+# ─── Cloudflare Tunnel (optional — omit to disable) ──────
+# TUNNEL_TOKEN=eyJhIjoiYWJj...                      # from CF Zero Trust dashboard
+# TUNNEL_METRICS=0.0.0.0:2000                       # Prometheus metrics endpoint
+```
+
+> **Security note:** The `.env` file contains sensitive credentials. Never commit it to version control. Add it to your `.gitignore` if you track your compose files in git.
+
+> **Generating `JWT_SECRET`:** Run `openssl rand -hex 32` in your terminal to generate a cryptographically secure 64-character hex string.
+
+> **`MYSQL_PASSWORD` must match:** The password in `MYSQL_PASSWORD` and the password portion of `DATABASE_URL` must be identical. If you change one, change both.
+
+**`docker-compose.yml`:**
+
 ```yaml
 services:
   traeger:
@@ -77,18 +118,21 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/New_York
+      - TZ=${TZ:-America/New_York}
       - NODE_ENV=production
       - PORT=8420
-      - DATABASE_URL=mysql://traeger:${MYSQL_PASSWORD:-traeger_pass}@mysql:3306/traeger_dashboard
+      - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:8420}
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-}        # optional
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}  # optional
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+      - TUNNEL_METRICS=${TUNNEL_METRICS:-}
     volumes:
       - ./config:/config
     ports:
       - 8420:8420
+      # - 2000:2000  # uncomment if using TUNNEL_METRICS
     depends_on:
       mysql:
         condition: service_healthy
@@ -114,6 +158,15 @@ services:
 volumes:
   mysql_data:
 ```
+
+**Start the stack:**
+
+```bash
+cd traeger/
+docker compose up -d
+```
+
+Docker Compose reads the `.env` file automatically — no `--env-file` flag needed.
 
 ### docker cli
 
@@ -311,7 +364,7 @@ pnpm install
 # Start dev server (Express + Vite HMR)
 pnpm dev
 
-# Run tests (459 tests across 16 files)
+# Run tests (471 tests across 16 files)
 pnpm test
 
 # Type check
@@ -516,15 +569,84 @@ location / {
 
 ## Health Monitoring
 
-The application exposes three operational endpoints that require no authentication:
+The application exposes four operational endpoints that require no authentication:
 
 | Endpoint | Purpose |
 |----------|--------|
-| `GET /api/health` | Returns 200 if the app is ready (DB connected, VAPID initialized), 503 if degraded. Includes memory stats. Used by Docker HEALTHCHECK and reverse proxy probes. |
+| `GET /api/health` | Returns 200 if all services are healthy, 503 if degraded. Checks database, VAPID, and Cloudflare Tunnel status. Used by Docker HEALTHCHECK and reverse proxy probes. |
+| `GET /api/health/services` | Detailed breakdown of all container services: app, database, tunnel, push notifications, s6 services, and memory. Useful for debugging. |
 | `GET /api/metrics` | Returns runtime metrics: active MQTT sessions, SSE client count, active alarms, heap usage, uptime. |
 | `GET /api/version` | Returns build metadata: version, Node.js version, PID, startup timestamp. |
 
 The Docker image includes a `HEALTHCHECK` instruction that pings `/api/health` every 30 seconds. Docker Compose, Swarm, and Kubernetes will automatically restart unhealthy containers.
+
+### Health Check Response
+
+The `/api/health` endpoint returns a comprehensive status object:
+
+```json
+{
+  "status": "ok",
+  "database": "connected",
+  "vapid": "ready",
+  "tunnel": {
+    "configured": true,
+    "status": "connected",
+    "metricsEndpoint": "http://0.0.0.0:2000/metrics",
+    "metricsReachable": true
+  },
+  "uptime": 86400,
+  "memory": {
+    "heapUsedMB": 45.23,
+    "heapTotalMB": 64.00,
+    "rssMB": 92.15,
+    "externalMB": 2.34
+  }
+}
+```
+
+**Tunnel status values:**
+
+| Status | Meaning |
+|--------|--------|
+| `not_configured` | No `TUNNEL_TOKEN` set — tunnel is disabled (normal for LAN-only deployments) |
+| `connected` | Tunnel process is running and metrics endpoint confirms connectivity |
+| `process_running` | Tunnel process is running (no metrics endpoint to verify connectivity) |
+| `process_not_found` | Token is configured but `cloudflared` process is not running (triggers degraded status) |
+| `error` | Unexpected error checking tunnel status |
+
+### Service Health Endpoint
+
+The `/api/health/services` endpoint provides a detailed breakdown for debugging:
+
+```json
+{
+  "overall": "ok",
+  "app": { "status": "running", "pid": 123, "uptime": 86400, "version": "0.3.2" },
+  "database": { "status": "connected", "url": "configured" },
+  "tunnel": { "configured": true, "status": "connected" },
+  "pushNotifications": { "vapid": "ready" },
+  "s6Services": [
+    { "name": "svc-traeger", "status": "running", "pid": 123, "uptime": 86400 },
+    { "name": "svc-cloudflared", "status": "running", "pid": 456, "uptime": 86395 }
+  ],
+  "memory": { "heapUsedMB": 45.23, "heapTotalMB": 64.00, "rssMB": 92.15, "externalMB": 2.34 }
+}
+```
+
+**Quick health check from the command line** (inside the container):
+
+```bash
+# Basic health check
+wget -qO- http://localhost:8420/api/health | python3 -m json.tool
+
+# Detailed service status
+wget -qO- http://localhost:8420/api/health/services | python3 -m json.tool
+
+# Check s6 services directly
+s6-svstat /run/service/svc-traeger
+s6-svstat /run/service/svc-cloudflared
+```
 
 ---
 
@@ -590,6 +712,7 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v0.3.2 | 2026-04-07 | Tunnel + s6 health in `/api/health`, new `/api/health/services` endpoint, `.env` example in README, 15 new tests |
 | v0.3.1 | 2026-04-07 | Tunnel Prometheus metrics (`TUNNEL_METRICS`), scrape config examples, 11 new tests |
 | v0.3.0 | 2026-04-07 | Embedded Cloudflare Tunnel support (cloudflared via s6-overlay), Docker secrets for tunnel token, health-gated startup, 26 new tests |
 | v0.2.1 | 2026-04-07 | Node.js 24 LTS upgrade, dependency updates (31 npm + 5 CI actions + Alpine 3.23), Dependabot ignore rules |

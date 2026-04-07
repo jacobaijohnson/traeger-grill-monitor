@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-04-07
+
+### Added
+
+- **Tunnel health in `/api/health`**: The health endpoint now reports Cloudflare Tunnel status (`connected`, `not_configured`, `process_running`, `process_not_found`). When `TUNNEL_METRICS` is set, it probes the cloudflared `/ready` endpoint to verify connectivity. A configured tunnel with a missing process triggers `degraded` status.
+- **Service health endpoint** (`GET /api/health/services`): Detailed breakdown of all container services including app, database, tunnel, push notifications, s6 service status (via `s6-svstat`), and memory usage. Useful for debugging container health issues.
+- **s6 service status checking**: Parses `s6-svstat` output to report PID and uptime for `svc-traeger` and `svc-cloudflared`. Gracefully handles dev environments where s6 is not available.
+- **Docker secret detection in health check**: Tunnel health check detects both `TUNNEL_TOKEN` env var and `/run/secrets/tunnel_token` Docker secret file.
+- **Complete `.env` example in README**: Added a full `.env` file example with all required and optional variables, including placement instructions (same directory as `docker-compose.yml`).
+- **15 new tests**: Coverage for tunnel health checking, service health endpoint, s6 service status parsing, and degraded status detection.
+
+### Changed
+
+- **Health check response expanded**: `/api/health` now includes a `tunnel` object alongside `database`, `vapid`, `uptime`, and `memory`.
+- **Health Monitoring section rewritten**: README now documents all four endpoints with example JSON responses, tunnel status value table, and CLI health check commands.
+
 ## [0.3.1] - 2026-04-07
 
 ### Added

@@ -13,6 +13,16 @@ import { serveStatic, setupVite } from "./vite";
 import { registerSSERoutes } from "../sse";
 import { seedAdmin } from "./seed-admin";
 import { initVapidKeys } from "../web-push";
+import { registerHealthRoutes } from "../health";
+import { logger } from "../logger";
+import {
+  getActiveSessionUserIds,
+  disconnectMqtt,
+  getTelemetry,
+} from "../mqtt-manager";
+import { purgeStaleTelemetry } from "../db/telemetry";
+
+const log = logger.child({ module: "server" });
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,6 +43,68 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// ─── STB-2: Stale MQTT Session Reaper ─────────────────
+const STALE_SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const STALE_SESSION_THRESHOLD = 30 * 60 * 1000; // 30 minutes no update
+
+function startStaleSessionReaper(): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    const userIds = getActiveSessionUserIds();
+    let reaped = 0;
+
+    for (const userId of userIds) {
+      const telemetry = getTelemetry(userId);
+      if (!telemetry) {
+        // Session exists but no telemetry — stale
+        log.warn({ userId }, "Reaping stale MQTT session (no telemetry)");
+        disconnectMqtt(userId);
+        reaped++;
+        continue;
+      }
+
+      const idleMs = Date.now() - telemetry.lastUpdate;
+      if (idleMs > STALE_SESSION_THRESHOLD) {
+        log.warn({ userId, idleMinutes: Math.round(idleMs / 60000) }, "Reaping stale MQTT session (idle too long)");
+        disconnectMqtt(userId);
+        reaped++;
+      }
+    }
+
+    if (reaped > 0) {
+      log.info({ reaped, remaining: userIds.length - reaped }, "Stale session reaper completed");
+    }
+  }, STALE_SESSION_CHECK_INTERVAL);
+}
+
+// ─── STB-4: Scheduled Telemetry Purge ─────────────────
+const TELEMETRY_PURGE_INTERVAL = 24 * 60 * 60 * 1000; // Daily
+const TELEMETRY_RETENTION_DAYS = 90;
+
+function startTelemetryPurge(): ReturnType<typeof setInterval> {
+  // Run first purge 1 minute after startup, then daily
+  setTimeout(async () => {
+    try {
+      const deleted = await purgeStaleTelemetry(TELEMETRY_RETENTION_DAYS);
+      if (deleted !== null && deleted > 0) {
+        log.info({ deleted, retentionDays: TELEMETRY_RETENTION_DAYS }, "Telemetry purge completed");
+      }
+    } catch (err) {
+      log.error({ err }, "Telemetry purge failed");
+    }
+  }, 60 * 1000);
+
+  return setInterval(async () => {
+    try {
+      const deleted = await purgeStaleTelemetry(TELEMETRY_RETENTION_DAYS);
+      if (deleted !== null && deleted > 0) {
+        log.info({ deleted, retentionDays: TELEMETRY_RETENTION_DAYS }, "Telemetry purge completed");
+      }
+    } catch (err) {
+      log.error({ err }, "Telemetry purge failed");
+    }
+  }, TELEMETRY_PURGE_INTERVAL);
+}
+
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -40,9 +112,20 @@ async function startServer() {
   // Trust proxy (deployed behind reverse proxy)
   app.set('trust proxy', 1);
 
-  // ─── Security Headers ──────────────────────────────
+  // ─── Security Headers (SEC-2: Enable basic CSP) ────
   app.use(helmet({
-    contentSecurityPolicy: false, // CSP managed by Vite in dev, static in prod
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "wss:", "https:"],
+        workerSrc: ["'self'", "blob:"],
+        frameSrc: ["'self'"],
+      },
+    },
     crossOriginEmbedderPolicy: false, // Allow embedding for various auth flows
   }));
 
@@ -65,9 +148,12 @@ async function startServer() {
     message: { error: "Too many authentication attempts, please try again later." },
   });
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // ─── SEC-5: Reduced JSON body limit (5MB default) ──
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ limit: "5mb", extended: true }));
+
+  // ─── Health, Metrics, Version ──────────────────────
+  registerHealthRoutes(app);
 
   // ─── Better Auth ───────────────────────────────────
   // Apply auth rate limit to Better Auth routes
@@ -103,7 +189,7 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    log.info({ preferredPort, actualPort: port }, "Preferred port busy, using alternative");
   }
 
   // Seed admin user from env vars on first boot
@@ -111,12 +197,60 @@ async function startServer() {
 
   // Initialize VAPID keys for Web Push notifications
   await initVapidKeys().catch(err => {
-    console.warn("[WebPush] VAPID init failed (push notifications unavailable):", err.message);
+    log.warn({ err: err.message }, "VAPID init failed (push notifications unavailable)");
   });
+
+  // ─── STB-2: Start stale session reaper ─────────────
+  const reaperInterval = startStaleSessionReaper();
+
+  // ─── STB-4: Start telemetry purge schedule ─────────
+  const purgeInterval = startTelemetryPurge();
 
   server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    log.info({ port, pid: process.pid, nodeVersion: process.version }, "Server running");
   });
+
+  // ─── STB-1: Graceful Shutdown ──────────────────────
+  let isShuttingDown = false;
+
+  async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    log.info({ signal }, "Graceful shutdown initiated");
+
+    // 1. Stop accepting new connections
+    server.close(() => {
+      log.info("HTTP server closed");
+    });
+
+    // 2. Clear scheduled intervals
+    clearInterval(reaperInterval);
+    clearInterval(purgeInterval);
+
+    // 3. Disconnect all MQTT sessions
+    const activeUsers = getActiveSessionUserIds();
+    log.info({ count: activeUsers.length }, "Disconnecting MQTT sessions");
+    for (const userId of activeUsers) {
+      try {
+        disconnectMqtt(userId);
+      } catch (err) {
+        log.warn({ userId, err }, "Error disconnecting MQTT session during shutdown");
+      }
+    }
+
+    // 4. Allow in-flight requests to complete (max 10s)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    log.info("Shutdown complete");
+    process.exit(0);
+  }
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
-startServer().catch(console.error);
+startServer().catch(err => {
+  log.fatal({ err }, "Server startup failed");
+  process.exit(1);
+});

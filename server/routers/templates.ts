@@ -15,7 +15,7 @@ import {
 
 export const templatesRouter = router({
   list: publicProcedure
-    .input(z.object({ category: z.string().optional(), method: z.string().optional() }).optional())
+    .input(z.object({ category: z.string().max(128).optional(), method: z.string().max(128).optional() }).optional())
     .query(({ input }) => {
       let templates = COOK_TEMPLATES;
       if (input?.category) templates = templates.filter((t) => t.category === input.category);
@@ -24,7 +24,7 @@ export const templatesRouter = router({
     }),
 
   get: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(128) }))
     .query(({ input }) => {
       const template = COOK_TEMPLATES.find((t) => t.id === input.id);
       if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
@@ -36,21 +36,21 @@ export const customTemplatesRouter = router({
   create: protectedProcedure
     .input(z.object({
       name: z.string().min(1).max(128),
-      description: z.string().optional(),
-      category: z.string(),
-      method: z.string(),
-      meatCut: z.string().optional(),
+      description: z.string().max(2048).optional(),
+      category: z.string().max(128),
+      method: z.string().max(128),
+      meatCut: z.string().max(128).optional(),
       difficulty: z.enum(["beginner", "intermediate", "advanced"]).default("intermediate"),
-      estimatedTime: z.string().optional(),
+      estimatedTime: z.string().max(64).optional(),
       stages: z.array(z.object({
-        name: z.string(),
-        grillTemp: z.number(),
+        name: z.string().max(256),
+        grillTemp: z.number().min(0).max(1200),
         triggerType: z.enum(["time", "probe_temp", "manual"]),
-        triggerValue: z.number(),
+        triggerValue: z.number().min(0).max(1200),
         superSmoke: z.boolean(),
-        alertMessage: z.string(),
+        alertMessage: z.string().max(512),
       })),
-      tips: z.array(z.string()).optional(),
+      tips: z.array(z.string().max(256)).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const id = await createCustomTemplate({
@@ -74,23 +74,23 @@ export const customTemplatesRouter = router({
 
   update: protectedProcedure
     .input(z.object({
-      id: z.number(),
+      id: z.number().int().min(1),
       name: z.string().min(1).max(128).optional(),
-      description: z.string().optional(),
-      category: z.string().optional(),
-      method: z.string().optional(),
-      meatCut: z.string().optional(),
+      description: z.string().max(2048).optional(),
+      category: z.string().max(128).optional(),
+      method: z.string().max(128).optional(),
+      meatCut: z.string().max(128).optional(),
       difficulty: z.enum(["beginner", "intermediate", "advanced"]).optional(),
-      estimatedTime: z.string().optional(),
+      estimatedTime: z.string().max(64).optional(),
       stages: z.array(z.object({
-        name: z.string(),
-        grillTemp: z.number(),
+        name: z.string().max(256),
+        grillTemp: z.number().min(0).max(1200),
         triggerType: z.enum(["time", "probe_temp", "manual"]),
-        triggerValue: z.number(),
+        triggerValue: z.number().min(0).max(1200),
         superSmoke: z.boolean(),
-        alertMessage: z.string(),
+        alertMessage: z.string().max(512),
       })).optional(),
-      tips: z.array(z.string()).optional(),
+      tips: z.array(z.string().max(256)).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const updateData: Record<string, unknown> = {};
@@ -108,14 +108,14 @@ export const customTemplatesRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await deleteCustomTemplate(input.id, ctx.user.id);
       return { success: true };
     }),
 
   publish: protectedProcedure
-    .input(z.object({ id: z.number(), publish: z.boolean() }))
+    .input(z.object({ id: z.number().int().min(1), publish: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
       await updateCustomTemplate(input.id, ctx.user.id, { isPublished: input.publish ? 1 : 0 });
       return { success: true };
@@ -132,7 +132,7 @@ export const customTemplatesRouter = router({
     }),
 
   get: publicProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ input }) => {
       const template = await getCustomTemplate(input.id);
       if (!template) throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
@@ -140,7 +140,7 @@ export const customTemplatesRouter = router({
     }),
 
   fork: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const newId = await forkCustomTemplate(input.id, ctx.user.id, ctx.user.name || "Anonymous Pitmaster");
       return { id: newId };
@@ -158,7 +158,7 @@ export const meatProfilesRouter = router({
   }),
 
   get: publicProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string().max(128) }))
     .query(({ input }) => {
       const profile = MEAT_PROFILES[input.id];
       if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Meat profile not found" });

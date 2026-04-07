@@ -27,6 +27,7 @@ import {
   type CookAlert as MqttCookAlert,
 } from "../mqtt-manager";
 import { COMMANDS } from "@shared/traeger-types";
+import { autoLog, mqttLog, cookLog } from "../logger";
 
 // ─── RC-2 Fix: Per-user connection mutex ───────────────────
 // Prevents concurrent ensureMqttConnected calls from racing
@@ -114,9 +115,9 @@ export async function ensureMqttConnected(userId: string) {
           const sess = await getTraegerSession(uid);
           if (!sess?.selectedGrillId) return;
           await traegerSendCommand(freshToken, sess.selectedGrillId, command);
-          console.log(`[Automation] Sent command ${command} for user ${uid}`);
+          autoLog.info({ userId: uid, command }, "Sent automation command");
         } catch (err) {
-          console.error(`[Automation] Failed to send command ${command} for user ${uid}:`, err);
+          autoLog.error({ userId: uid, command, err }, "Failed to send automation command");
         }
       });
       // Wire cook state persistence callback
@@ -129,7 +130,7 @@ export async function ensureMqttConnected(userId: string) {
           });
           await updateCookSessionAlerts(cook.cookSessionId, JSON.stringify(cook.alerts));
         } catch (err) {
-          console.error(`[Cook State] Failed to persist for user ${uid}:`, err);
+          cookLog.error({ userId: uid, err }, "Failed to persist cook state");
         }
       });
       // Hydrate in-memory history from DB (last 8 hours)
@@ -137,10 +138,10 @@ export async function ensureMqttConnected(userId: string) {
         const dbHistory = await getRecentTelemetry(userId, session.selectedGrillId, 480);
         if (dbHistory.length > 0) {
           const hydrated = hydrateHistory(userId, dbHistory);
-          console.log(`[Telemetry] Hydrated ${hydrated} DB points for user ${userId}`);
+          mqttLog.info({ userId, hydrated }, "Hydrated DB telemetry points");
         }
       } catch (err) {
-        console.error("[Telemetry] Failed to hydrate history:", err);
+        mqttLog.error({ err }, "Failed to hydrate telemetry history");
       }
       // Hydrate active cook state from DB if one exists
       try {
@@ -160,11 +161,11 @@ export async function ensureMqttConnected(userId: string) {
             stagesJson: typeof activeCook.stagesJson === 'string' ? activeCook.stagesJson : JSON.stringify(activeCook.stagesJson),
           });
           if (restored) {
-            console.log(`[Cook State] Restored active cook session ${activeCook.id} for user ${userId}`);
+            cookLog.info({ userId, cookSessionId: activeCook.id }, "Restored active cook session");
           }
         }
       } catch (err) {
-        console.error("[Cook State] Failed to hydrate cook state:", err);
+        cookLog.error({ err }, "Failed to hydrate cook state");
       }
       // Trigger status request
       try {
@@ -174,7 +175,7 @@ export async function ensureMqttConnected(userId: string) {
       releaseLock!();
     } catch (err) {
       rejectLock!(err);
-      console.error("[Telemetry] Failed to connect MQTT:", err);
+      mqttLog.error({ err }, "Failed to connect MQTT");
     } finally {
       // Clean up the lock after a short delay to prevent immediate re-entry
       setTimeout(() => {

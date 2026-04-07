@@ -1,6 +1,7 @@
 import { eq, and, desc, gte, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
+import { dbLog } from "../logger";
 
 // ─── RC-1 Fix: Resilient DB Connection with Pool ───────────
 
@@ -44,7 +45,7 @@ export async function getDb() {
   if (!process.env.DATABASE_URL) return null;
 
   if (_connectionErrors >= MAX_CONSECUTIVE_ERRORS && _pool) {
-    console.warn(`[Database] ${_connectionErrors} consecutive errors — recreating connection pool`);
+    dbLog.warn({ errorCount: _connectionErrors }, "Consecutive errors — recreating connection pool");
     try {
       await _pool.end();
     } catch { /* ignore cleanup errors */ }
@@ -58,7 +59,7 @@ export async function getDb() {
       _pool = createPool();
       _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to create pool:", error);
+      dbLog.warn({ err: error }, "Failed to create connection pool");
       _pool = null;
       _db = null;
     }
@@ -79,7 +80,7 @@ export async function withDbRetry<T>(
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const db = await getDb();
     if (!db) {
-      console.warn(`[Database] Not available for ${label}`);
+      dbLog.warn({ label }, "Database not available");
       return null;
     }
 
@@ -92,7 +93,7 @@ export async function withDbRetry<T>(
       _connectionErrors++;
 
       if (isTransient && attempt < MAX_RETRIES) {
-        console.warn(`[Database] Transient error in ${label} (attempt ${attempt}/${MAX_RETRIES}), retrying...`);
+        dbLog.warn({ label, attempt, maxRetries: MAX_RETRIES }, "Transient error, retrying");
         if (_pool) {
           try { await _pool.end(); } catch { /* ignore */ }
           _pool = null;
@@ -102,7 +103,7 @@ export async function withDbRetry<T>(
         continue;
       }
 
-      console.error(`[Database] ${label} failed after ${attempt} attempts:`, error);
+      dbLog.error({ label, attempt, err: error }, "Query failed after retries");
       throw error;
     }
   }

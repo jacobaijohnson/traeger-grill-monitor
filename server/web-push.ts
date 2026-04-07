@@ -9,10 +9,16 @@
 import webpush from "web-push";
 import { withDbRetry, sql } from "./db/connection";
 import { getSetting, setSetting } from "./db/access-control";
+import { pushLog } from "./logger";
 
 // ─── VAPID Key Management ───────────────────────────────
 
 let vapidInitialized = false;
+
+/** Check if VAPID keys have been initialized (for health checks). */
+export function isVapidReady(): boolean {
+  return vapidInitialized;
+}
 
 /**
  * Initialize VAPID keys. Auto-generates and stores them on first boot.
@@ -25,19 +31,19 @@ export async function initVapidKeys(): Promise<void> {
   let privateKey = await getSetting("vapid_private_key");
 
   if (!publicKey || !privateKey) {
-    console.log("[WebPush] Generating new VAPID key pair...");
+    pushLog.info("Generating new VAPID key pair");
     const keys = webpush.generateVAPIDKeys();
     publicKey = keys.publicKey;
     privateKey = keys.privateKey;
     await setSetting("vapid_public_key", publicKey);
     await setSetting("vapid_private_key", privateKey);
-    console.log("[WebPush] VAPID keys generated and stored.");
+    pushLog.info("VAPID keys generated and stored");
   }
 
   const contactEmail = process.env.VAPID_CONTACT_EMAIL || process.env.ADMIN_EMAIL || "admin@localhost";
   webpush.setVapidDetails(`mailto:${contactEmail}`, publicKey, privateKey);
   vapidInitialized = true;
-  console.log("[WebPush] VAPID initialized.");
+  pushLog.info("VAPID initialized");
 }
 
 /**
@@ -239,7 +245,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
         if (err.statusCode === 404 || err.statusCode === 410) {
           staleEndpoints.push(sub.endpoint);
         } else {
-          console.error(`[WebPush] Failed to send to ${sub.endpoint.slice(0, 60)}...:`, err.statusCode || err.message);
+          pushLog.error({ endpoint: sub.endpoint.slice(0, 60), err: err.statusCode || err.message }, "Failed to send push");
         }
       }
     })
@@ -250,7 +256,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     await removeSubscription(userId, endpoint);
   }
   if (staleEndpoints.length > 0) {
-    console.log(`[WebPush] Cleaned up ${staleEndpoints.length} stale subscription(s) for user ${userId}`);
+    pushLog.info({ userId, count: staleEndpoints.length }, "Cleaned up stale subscriptions");
   }
 
   return sent;

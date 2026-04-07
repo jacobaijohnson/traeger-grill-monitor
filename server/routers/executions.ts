@@ -32,7 +32,7 @@ export const executionsRouter = router({
 
   // Get a single execution record
   get: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       const exec = await getProgramExecution(input.id);
       if (!exec || exec.userId !== ctx.user.id) return null;
@@ -105,7 +105,7 @@ export const executionsRouter = router({
 
   // Export execution as CSV string
   exportCsv: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       const exec = await getProgramExecution(input.id);
       if (!exec || exec.userId !== ctx.user.id)
@@ -162,8 +162,8 @@ export const executionsRouter = router({
   review: protectedProcedure
     .input(
       z.object({
-        id: z.number(),
-        notes: z.string().optional(),
+        id: z.number().int().min(1),
+        notes: z.string().max(4096).optional(),
         rating: z.number().min(1).max(5).optional(),
       })
     )

@@ -567,3 +567,40 @@
 - [x] Push router endpoints: dismissAlarm, dismissAllAlarms, getActiveAlarms
 - [x] Test alarm escalation (18 tests for register, dismiss, escalation, auto-stop)
 - [x] 353 tests passing across 14 test files
+
+## Enterprise Hardening Audit (28 findings)
+
+### Infrastructure / Observability
+- [x] OBS-1: Replace 63 console.log/warn/error calls with structured pino logger (9 child loggers)
+- [x] OBS-2: Add /api/health endpoint with DB ping, VAPID check, memory stats
+- [x] OBS-3: Add /api/metrics endpoint exposing session count, SSE connections, alarm count, heap usage
+- [x] OBS-4: Production-safe ErrorBoundary (hide stack traces in prod, show in dev)
+- [x] DPL-1: Add Docker HEALTHCHECK instruction (30s interval, 5s timeout, 3 retries)
+- [x] DPL-2: Add /api/version endpoint with build metadata
+
+### Stability
+- [x] STB-1: Implement graceful shutdown (SIGTERM/SIGINT → close HTTP → disconnect MQTT → exit)
+- [x] STB-2: Add stale MQTT session reaper (5-min cycle, 30-min idle threshold)
+- [x] STB-3: Connection lock race condition — audited, existing mutex pattern is correct
+- [x] STB-4: Schedule automatic telemetry purge (daily, 90-day retention)
+- [x] STB-5: Audit empty catch blocks — all 17 are intentional (cleanup/fallback patterns)
+
+### Security
+- [x] SEC-1: Add .max() bounds to all 73 unbounded z.string() inputs
+- [x] SEC-2: Enable CSP headers via helmet
+- [x] SEC-3: Add .min()/.max() bounds to temperature/number inputs (0-1200°F, int IDs)
+- [x] SEC-5: Reduce JSON body limit to 5MB
+
+### Performance
+- [x] PERF-1: Add lazy loading for all 13 route pages (React.lazy + Suspense)
+- [x] PERF-3: Add missing index on telemetry_readings(cookSessionId)
+- [x] PERF-4: Add missing composite index on cook_sessions(userId, status)
+- [x] PERF-5: Add index on telemetry_readings(recordedAt) for purge queries
+
+### Tests
+- [x] Write tests for health endpoint (4 tests)
+- [x] Write tests for graceful shutdown (4 tests)
+- [x] Write tests for stale session reaper (2 tests)
+- [x] Write tests for input validation bounds (3 test suites)
+- [x] Write tests for structured logger (4 tests)
+- [x] 402 tests passing across 15 test files

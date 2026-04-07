@@ -1,5 +1,6 @@
 import { getDb, withDbRetry, eq, and, gte, lte, sql } from "./connection";
 import { lt } from "drizzle-orm";
+import { dbLog } from "../logger";
 import {
   telemetryReadings,
   type InsertTelemetryReading,
@@ -83,7 +84,7 @@ export async function purgeStaleTelemetry(retentionDays = 90): Promise<number> {
         )
       );
     const affectedRows = (deleteResult as unknown as [{ affectedRows: number }])?.[0]?.affectedRows ?? 0;
-    console.log(`[Retention] Purged ${affectedRows} stale telemetry readings older than ${retentionDays} days`);
+    dbLog.info({ deleted: affectedRows, retentionDays }, "Purged stale telemetry readings");
     return affectedRows;
   }, "purgeStaleTelemetry");
   return result ?? 0;

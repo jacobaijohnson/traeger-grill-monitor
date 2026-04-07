@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import type { TraegerTokens, TraegerUserData, TraegerMqttCredentials } from "@shared/traeger-types";
+import { apiLog } from "./logger";
 
 // Traeger auth proxy (wraps Cognito — preferred approach per go-traeger SDK)
 const TRAEGER_AUTH_URL = "https://auth-api.iot.traegergrills.io/tokens";
@@ -184,29 +185,29 @@ async function cognitoDirectLogin(email: string, password: string): Promise<Trae
 export async function traegerLogin(email: string, password: string): Promise<TraegerTokens> {
   // Attempt 1: Traeger auth proxy (with retry for transient failures)
   try {
-    console.log("[Traeger Auth] Attempting auth via Traeger proxy...");
+    apiLog.info("Attempting auth via Traeger proxy");
     const tokens = await withRetry(() => traegerProxyLogin(email, password), { maxRetries: 2, baseDelay: 500 });
     if (!validateTokenResponse(tokens as unknown as Record<string, unknown>)) {
       throw new Error("Invalid token response from Traeger proxy");
     }
-    console.log("[Traeger Auth] Success via Traeger proxy");
+    apiLog.info("Auth success via Traeger proxy");
     return tokens;
   } catch (proxyErr) {
     const proxyMsg = extractErrorMessage(proxyErr);
-    console.warn(`[Traeger Auth] Proxy auth failed: ${proxyMsg}`);
+    apiLog.warn({ error: proxyMsg }, "Proxy auth failed");
 
     // Attempt 2: Direct Cognito
     try {
-      console.log("[Traeger Auth] Attempting auth via direct Cognito...");
+      apiLog.info("Attempting auth via direct Cognito");
       const tokens = await withRetry(() => cognitoDirectLogin(email, password), { maxRetries: 2, baseDelay: 500 });
       if (!validateTokenResponse(tokens as unknown as Record<string, unknown>)) {
         throw new Error("Invalid token response from Cognito");
       }
-      console.log("[Traeger Auth] Success via direct Cognito");
+      apiLog.info("Auth success via direct Cognito");
       return tokens;
     } catch (cognitoErr) {
       const cognitoMsg = extractErrorMessage(cognitoErr);
-      console.error(`[Traeger Auth] Cognito auth also failed: ${cognitoMsg}`);
+      apiLog.error({ error: cognitoMsg }, "Cognito auth also failed");
 
       // Return the most useful error
       throw new Error(

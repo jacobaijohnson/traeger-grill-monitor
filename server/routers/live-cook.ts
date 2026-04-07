@@ -54,19 +54,19 @@ export const liveCookRouter = router({
   // Start a new cook session (from Cook Guide or manual)
   start: protectedProcedure
     .input(z.object({
-      grillId: z.string(),
-      templateId: z.string().optional(),
-      meatType: z.string().optional(),
-      cutName: z.string().optional(),
-      method: z.string().optional(),
-      meatProfileId: z.string().optional(),
+      grillId: z.string().max(128),
+      templateId: z.string().max(128).optional(),
+      meatType: z.string().max(128).optional(),
+      cutName: z.string().max(128).optional(),
+      method: z.string().max(128).optional(),
+      meatProfileId: z.string().max(128).optional(),
       stages: z.array(z.object({
-        name: z.string(),
-        grillTemp: z.number(),
+        name: z.string().max(256),
+        grillTemp: z.number().min(0).max(1200),
         triggerType: z.enum(["time", "probe_temp", "manual"]),
-        triggerValue: z.number(),
+        triggerValue: z.number().min(0).max(1200),
         superSmoke: z.boolean(),
-        alertMessage: z.string(),
+        alertMessage: z.string().max(512),
       })).optional(),
       enableNotifications: z.boolean().default(true),
       enableAlarms: z.boolean().default(true),
@@ -170,7 +170,7 @@ export const liveCookRouter = router({
 
   // Dismiss a fired alert
   dismissAlert: protectedProcedure
-    .input(z.object({ alertId: z.string() }))
+    .input(z.object({ alertId: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       mqttDismissAlert(ctx.user.id, input.alertId);
       return { success: true };
@@ -179,8 +179,8 @@ export const liveCookRouter = router({
   // Add a custom alert to the active cook
   addAlert: protectedProcedure
     .input(z.object({
-      label: z.string(),
-      triggerTemp: z.number(),
+      label: z.string().max(256),
+      triggerTemp: z.number().min(0).max(1200),
       triggerType: z.enum(["probe", "grill"]).default("probe"),
       alertType: z.enum(["notification", "alarm"]).default("notification"),
     }))
@@ -215,7 +215,7 @@ export const liveCookRouter = router({
 
   // Remove a pending alert
   removeAlert: protectedProcedure
-    .input(z.object({ alertId: z.string() }))
+    .input(z.object({ alertId: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       mqttRemoveAlert(ctx.user.id, input.alertId);
       return { success: true };
@@ -228,7 +228,7 @@ export const liveCookRouter = router({
 
   // Get alerts for a specific cook session (from DB, for history)
   sessionAlerts: protectedProcedure
-    .input(z.object({ cookSessionId: z.number() }))
+    .input(z.object({ cookSessionId: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       return getCookAlertsForSession(input.cookSessionId, ctx.user.id);
     }),

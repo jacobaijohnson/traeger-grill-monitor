@@ -24,6 +24,7 @@ import {
 import type { AutomationStage } from "../../shared/traeger-types";
 import type { CookProgram, ProgramStep } from "../../shared/cook-programs";
 import { PRESET_PROGRAMS, resolveProgram } from "../../shared/cook-programs";
+import { autoLog } from "../logger";
 
 /**
  * Bridge: Convert new ProgramStep[] to legacy AutomationStage[] format
@@ -167,18 +168,18 @@ export const automationRouter = router({
   // Create a new automation program (from preset or custom)
   create: protectedProcedure
     .input(z.object({
-      name: z.string(),
-      description: z.string().optional(),
-      category: z.string().optional(),
-      method: z.string().optional(),
-      meatCut: z.string().optional(),
-      difficulty: z.string().optional(),
-      estimatedTime: z.string().optional(),
-      tags: z.array(z.string()).optional(),
-      templateId: z.string().optional(),
+      name: z.string().max(256),
+      description: z.string().max(2048).optional(),
+      category: z.string().max(128).optional(),
+      method: z.string().max(128).optional(),
+      meatCut: z.string().max(128).optional(),
+      difficulty: z.string().max(64).optional(),
+      estimatedTime: z.string().max(64).optional(),
+      tags: z.array(z.string().max(256)).optional(),
+      templateId: z.string().max(128).optional(),
       program: z.any(), // CookProgram JSON
-      variableValues: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-      grillId: z.string().optional(),
+      variableValues: z.record(z.string().max(256), z.union([z.string().max(256), z.number()])).optional(),
+      grillId: z.string().max(128).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const id = await createAutomationProgram({
@@ -207,7 +208,7 @@ export const automationRouter = router({
   // List user's programs
   list: protectedProcedure
     .input(z.object({
-      grillId: z.string().optional(),
+      grillId: z.string().max(128).optional(),
     }).optional())
     .query(async ({ ctx }) => {
       return getUserAutomationPrograms(ctx.user.id);
@@ -220,7 +221,7 @@ export const automationRouter = router({
 
   // Get live automation state from MQTT manager
   getLiveState: protectedProcedure
-    .input(z.object({ grillId: z.string().optional() }))
+    .input(z.object({ grillId: z.string().max(128).optional() }))
     .query(async ({ ctx }) => {
       return getAutomationState(ctx.user.id);
     }),
@@ -228,10 +229,10 @@ export const automationRouter = router({
   // Start a program (loads into MQTT manager for live execution)
   start: protectedProcedure
     .input(z.object({
-      id: z.number(),
-      grillId: z.string().optional(),
-      variableValues: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-      cookSessionId: z.number().optional(),
+      id: z.number().int().min(1),
+      grillId: z.string().max(128).optional(),
+      variableValues: z.record(z.string().max(256), z.union([z.string().max(256), z.number()])).optional(),
+      cookSessionId: z.number().int().min(1).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Mark as active in DB
@@ -268,9 +269,9 @@ export const automationRouter = router({
           outcome: "running",
           executionLogJson: [{ timestamp: Date.now(), event: "started", detail: `Program started with ${resolvedSteps.length} steps` }],
         });
-        console.log(`[Execution] Created execution #${executionId} for program #${input.id}`);
+        autoLog.info({ executionId, programId: input.id }, "Created execution record");
       } catch (e) {
-        console.warn("[Execution] Failed to create execution record:", e);
+        autoLog.warn({ err: e }, "Failed to create execution record");
       }
 
       // Load into MQTT manager
@@ -281,7 +282,7 @@ export const automationRouter = router({
 
   // Acknowledge current alarm (advance past wait_for_ack)
   acknowledge: protectedProcedure
-    .input(z.object({ grillId: z.string().optional() }))
+    .input(z.object({ grillId: z.string().max(128).optional() }))
     .mutation(async ({ ctx }) => {
       acknowledgeAutomationPhase(ctx.user.id);
       return { success: true };
@@ -289,7 +290,7 @@ export const automationRouter = router({
 
   // Skip to next step
   skip: protectedProcedure
-    .input(z.object({ grillId: z.string().optional() }))
+    .input(z.object({ grillId: z.string().max(128).optional() }))
     .mutation(async ({ ctx }) => {
       skipAutomationPhase(ctx.user.id);
       return { success: true };
@@ -297,7 +298,7 @@ export const automationRouter = router({
 
   // Advance stage (legacy compat + manual advance)
   advanceStage: protectedProcedure
-    .input(z.object({ id: z.number(), nextStage: z.number() }))
+    .input(z.object({ id: z.number().int().min(1), nextStage: z.number().int().min(0).max(50) }))
     .mutation(async ({ input }) => {
       await updateAutomationState(input.id, input.nextStage, true);
       return { success: true };
@@ -305,7 +306,7 @@ export const automationRouter = router({
 
   // Stop/abort a running program
   stop: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .mutation(async ({ ctx, input }) => {
       await updateAutomationState(input.id, 0, false);
 
@@ -321,10 +322,10 @@ export const automationRouter = router({
             event: "stopped",
             detail: "Program manually stopped by user",
           });
-          console.log(`[Execution] Finalized execution #${activeExec.id} as aborted`);
+          autoLog.info({ executionId: activeExec.id }, "Finalized execution as aborted");
         }
       } catch (e) {
-        console.warn("[Execution] Failed to finalize execution record:", e);
+        autoLog.warn({ err: e }, "Failed to finalize execution record");
       }
 
       return { success: true };
@@ -332,7 +333,7 @@ export const automationRouter = router({
 
   // Delete a program
   delete: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .mutation(async ({ input, ctx }) => {
       await deleteAutomationProgram(input.id, ctx.user.id);
       return { success: true };
@@ -350,7 +351,7 @@ export const automationRouter = router({
   fork: protectedProcedure
     .input(z.object({
       sourceId: z.number(),
-      name: z.string().optional(),
+      name: z.string().max(256).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const programs = await getUserAutomationPrograms(ctx.user.id);
@@ -383,7 +384,7 @@ export const automationRouter = router({
   // Publish/unpublish a program to community
   publish: protectedProcedure
     .input(z.object({
-      id: z.number(),
+      id: z.number().int().min(1),
       publish: z.boolean(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -400,7 +401,7 @@ export const automationRouter = router({
 
   // Get a single program by ID (for shareable links)
   getById: publicProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ input }) => {
       const program = await getAutomationProgram(input.id);
       if (!program) throw new Error("Program not found");
@@ -421,8 +422,8 @@ export const automationRouter = router({
   createFromPreset: protectedProcedure
     .input(z.object({
       presetIndex: z.number(),
-      variableValues: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
-      grillId: z.string().optional(),
+      variableValues: z.record(z.string().max(256), z.union([z.string().max(256), z.number()])).optional(),
+      grillId: z.string().max(128).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const preset = PRESET_PROGRAMS[input.presetIndex];

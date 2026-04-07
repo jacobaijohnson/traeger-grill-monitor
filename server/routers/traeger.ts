@@ -66,7 +66,7 @@ export const traegerRouter = router({
   }),
 
   selectGrill: protectedProcedure
-    .input(z.object({ grillId: z.string() }))
+    .input(z.object({ grillId: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       await updateSelectedGrill(ctx.user.id, input.grillId);
       return { success: true };

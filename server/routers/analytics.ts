@@ -11,7 +11,7 @@ import {
   getPelletTrend,
 } from "../db";
 
-const grillFilterInput = z.object({ grillId: z.string().optional() }).optional();
+const grillFilterInput = z.object({ grillId: z.string().max(128).optional() }).optional();
 
 export const analyticsRouter = router({
   summary: protectedProcedure
@@ -60,7 +60,7 @@ export const analyticsRouter = router({
   // Pellet level trend data for charting
   pelletTrend: protectedProcedure
     .input(z.object({
-      grillId: z.string().optional(),
+      grillId: z.string().max(128).optional(),
       days: z.number().min(1).max(365).default(30),
     }).optional())
     .query(async ({ ctx, input }) => {

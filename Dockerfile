@@ -79,6 +79,10 @@ COPY --from=builder /app/shared /app/shared
 # Add s6-overlay service definitions and init scripts
 COPY root/ /
 
+# DPL-1: Health check for Docker orchestrators (Compose, Swarm, K8s)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD wget -qO- http://localhost:${PORT}/api/health || exit 1
+
 # Ports and volumes (LSIO convention: /config for persistent data)
 EXPOSE 8420
 VOLUME /config

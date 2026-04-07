@@ -13,11 +13,11 @@ import {
 export const cookSessionRouter = router({
   start: protectedProcedure
     .input(z.object({
-      grillId: z.string(),
-      templateId: z.string().optional(),
-      meatType: z.string().optional(),
-      cutName: z.string().optional(),
-      method: z.string().optional(),
+      grillId: z.string().max(128),
+      templateId: z.string().max(128).optional(),
+      meatType: z.string().max(128).optional(),
+      cutName: z.string().max(128).optional(),
+      method: z.string().max(128).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const id = await createCookSession({
@@ -35,7 +35,7 @@ export const cookSessionRouter = router({
     }),
 
   end: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const session = await getCookSession(input.id, ctx.user.id);
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Cook session not found" });
@@ -44,7 +44,7 @@ export const cookSessionRouter = router({
     }),
 
   updateNotes: protectedProcedure
-    .input(z.object({ id: z.number(), notes: z.string(), rating: z.number().min(1).max(5).optional() }))
+    .input(z.object({ id: z.number().int().min(1), notes: z.string(), rating: z.number().min(1).max(5).optional() }))
     .mutation(async ({ ctx, input }) => {
       const session = await getCookSession(input.id, ctx.user.id);
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Cook session not found" });
@@ -53,13 +53,13 @@ export const cookSessionRouter = router({
     }),
 
   list: protectedProcedure
-    .input(z.object({ limit: z.number().default(50), grillId: z.string().optional() }).optional())
+    .input(z.object({ limit: z.number().default(50), grillId: z.string().max(128).optional() }).optional())
     .query(async ({ ctx, input }) => {
       return getUserCookSessions(ctx.user.id, input?.limit ?? 50, input?.grillId);
     }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       return getCookSession(input.id, ctx.user.id);
     }),
@@ -69,7 +69,7 @@ export const cookSessionRouter = router({
    * Returns a CSV string with session metadata and telemetry readings.
    */
   exportCsv: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       const session = await getCookSession(input.id, ctx.user.id);
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Cook session not found" });

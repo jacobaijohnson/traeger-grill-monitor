@@ -15,6 +15,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { auth } from "./_core/auth";
 import { fromNodeHeaders } from "better-auth/node";
+import { authLog } from "./logger";
 import {
   traegerRouter,
   grillRouter,
@@ -43,7 +44,7 @@ export const appRouter = router({
         });
       } catch (error) {
         // If sign-out fails (e.g., no session), still return success
-        console.warn("[Auth] Sign-out error (non-fatal):", error);
+        authLog.warn({ err: error }, "Sign-out error (non-fatal)");
       }
       return { success: true } as const;
     }),

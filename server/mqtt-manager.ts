@@ -4,6 +4,7 @@ import type { TempMarker } from "@shared/meat-science";
 import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent, pushAutomationEvent } from "./sse";
 import { sendPushIfEnabled } from "./web-push";
 import { registerAlarm, dismissAlarm, dismissAllAlarms } from "./alarm-escalation";
+import { mqttLog, cookLog, autoLog } from "./logger";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ function evaluateAlerts(session: MqttSession): CookAlert[] {
       alert.firedAt = Date.now();
       newlyFired.push(alert);
       session.firedAlerts.push({ ...alert });
-      console.log(`[ALERT] User session: ${alert.alertType.toUpperCase()} fired — ${alert.label} at ${currentTemp}°F (target: ${alert.triggerTemp}°F)`);
+      cookLog.info({ alertType: alert.alertType, label: alert.label, currentTemp, triggerTemp: alert.triggerTemp }, "Alert fired");
     }
   }
 
@@ -169,7 +170,7 @@ function detectStall(userId: string, session: MqttSession): void {
       cook.stallDetected = true;
       cook.stallStartedAt = Date.now();
       cook.stallStartTemp = probeTemp;
-      console.log(`[STALL] Detected at ${probeTemp}°F — temp change < 2°F over last 10 readings`);
+      cookLog.info({ probeTemp }, "Stall detected — temp change < 2°F over last 10 readings");
       // Web Push: stall detected
       sendPushIfEnabled(userId, "stallDetected", {
         title: "🥩 Stall Detected",
@@ -180,7 +181,7 @@ function detectStall(userId: string, session: MqttSession): void {
     }
   } else if (cook.stallDetected && probeTemp > (cook.stallStartTemp || 0) + 5) {
     // Stall broken — temp rose more than 5°F above stall start
-    console.log(`[STALL] Broken at ${probeTemp}°F (started at ${cook.stallStartTemp}°F)`);
+    cookLog.info({ probeTemp, stallStartTemp: cook.stallStartTemp }, "Stall broken");
     // Web Push: stall broken
     sendPushIfEnabled(userId, "stallBroken", {
       title: "🔥 Stall Broken!",
@@ -301,7 +302,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
     const triggerDesc = primaryMet
       ? `${stage.triggerType}=${stage.triggerValue}`
       : `${stage.secondaryTriggerType}=${stage.secondaryTriggerValue}`;
-    console.log(`[AUTO] User ${userId}: Compound trigger (${logic}) met by ${firedBy}: ${triggerDesc}`);
+    autoLog.info({ userId, logic, firedBy, triggerDesc }, "Compound trigger met");
   }
 
   // --- Escalating alarms: re-alarm every N°F above trigger ---
@@ -345,7 +346,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
         grillTemp: Math.round(grillTemp),
       });
 
-      console.log(`[AUTO] User ${userId}: Escalating alarm at ${Math.round(probeTemp)}°F (phase ${phase}: ${stage.name})`);
+      autoLog.info({ userId, probeTemp: Math.round(probeTemp), phase, stageName: stage.name }, "Escalating alarm");
       // Web Push: escalating alarm + register for persistent re-push
       const escalatingPayload = {
         title: `⚠️ ${stage.name} — ${Math.round(probeTemp)}°F`,
@@ -386,7 +387,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       alertType: stage.alertType,
     });
 
-    console.log(`[AUTO] User ${userId}: Phase ${phase} (${stage.name}) trigger fired at probe=${Math.round(probeTemp)}°F`);
+    autoLog.info({ userId, phase, stageName: stage.name, probeTemp: Math.round(probeTemp) }, "Phase trigger fired");
     // Web Push: phase trigger alert
     sendPushIfEnabled(userId, "alertFired", {
       title: `🎯 ${stage.name} — Target Reached!`,
@@ -404,7 +405,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       if (session.sendCommandCallback) {
         session.sendCommandCallback(userId, tempCommand)
           .then(() => {
-            console.log(`[AUTO] User ${userId}: Auto-set grill to ${stage.autoSetGrillTemp}°F (phase ${phase})`);
+            autoLog.info({ userId, grillTemp: stage.autoSetGrillTemp, phase }, "Auto-set grill temp");
             pushAutomationEvent(userId, {
               eventType: "auto_command",
               phase,
@@ -416,7 +417,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
             });
           })
           .catch((err: unknown) => {
-            console.error(`[AUTO] User ${userId}: Failed to auto-set temp:`, err);
+            autoLog.error({ userId, err }, "Failed to auto-set temp");
           });
       }
     }
@@ -426,7 +427,7 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       advanceAutomationPhase(userId, session);
     } else if (stage.requireAcknowledge) {
       cook.phaseAcknowledged = false;
-      console.log(`[AUTO] User ${userId}: Phase ${phase} waiting for acknowledgment`);
+      autoLog.info({ userId, phase }, "Phase waiting for acknowledgment");
     }
 
     pushAutomationEvent(userId, {
@@ -449,7 +450,7 @@ function advanceAutomationPhase(userId: string, session: MqttSession): void {
 
   const nextPhase = cook.automationPhase + 1;
   if (nextPhase >= cook.automationStages.length) {
-    console.log(`[AUTO] User ${userId}: All automation phases complete`);
+    autoLog.info({ userId }, "All automation phases complete");
     return;
   }
 
@@ -477,10 +478,10 @@ function advanceAutomationPhase(userId: string, session: MqttSession): void {
       const tempCommand = JSON.stringify({ set: nextStage.grillTemp });
       session.sendCommandCallback(userId, tempCommand)
         .then(() => {
-          console.log(`[AUTO] User ${userId}: Set grill to ${nextStage.grillTemp}°F for phase ${nextPhase} (${nextStage.name})`);
+          autoLog.info({ userId, grillTemp: nextStage.grillTemp, phase: nextPhase, stageName: nextStage.name }, "Set grill temp for phase");
         })
         .catch((err: unknown) => {
-          console.error(`[AUTO] User ${userId}: Failed to set phase temp:`, err);
+          autoLog.error({ userId, err }, "Failed to set phase temp");
         });
     }
   }
@@ -500,7 +501,7 @@ function advanceAutomationPhase(userId: string, session: MqttSession): void {
     url: "/live-cook",
   }).catch(() => {});
 
-  console.log(`[AUTO] User ${userId}: Advanced to phase ${nextPhase}: ${nextStage.name}`);
+  autoLog.info({ userId, phase: nextPhase, stageName: nextStage.name }, "Advanced to phase");
 }
 
 // ─── MQTT Connection ────────────────────────────────────
@@ -548,7 +549,7 @@ export function connectMqtt(
   sessions.set(userId, session);
 
   try {
-    console.log(`[MQTT] User ${userId}: Connecting to ${thingName}...`);
+    mqttLog.info({ userId, thingName }, "Connecting to broker");
     const url = new URL(signedUrl);
     const wsUrl = `wss://${url.host}${url.pathname}${url.search}`;
 
@@ -564,15 +565,15 @@ export function connectMqtt(
     session.client = client;
 
     client.on("connect", () => {
-      console.log(`[MQTT] User ${userId}: Connected to broker`);
+      mqttLog.info({ userId }, "Connected to broker");
       session.reconnecting = false;
 
       const topic = `prod/thing/update/${thingName}`;
       client.subscribe(topic, { qos: 1 }, (err) => {
         if (err) {
-          console.error(`[MQTT] User ${userId}: Subscribe error:`, err);
+          mqttLog.error({ userId, err }, "Subscribe error");
         } else {
-          console.log(`[MQTT] User ${userId}: Subscribed to ${topic}`);
+          mqttLog.debug({ userId, topic }, "Subscribed to topic");
         }
       });
     });
@@ -619,7 +620,7 @@ export function connectMqtt(
             session.cookStatePersistInFlight = true;
             session.cookStatePersistCallback(userId, cook)
               .catch((e: unknown) => {
-                console.error(`[MQTT] User ${userId}: Cook state persist error:`, e);
+                mqttLog.error({ userId, err: e }, "Cook state persist error");
               })
               .finally(() => {
                 session.cookStatePersistInFlight = false;
@@ -654,12 +655,12 @@ export function connectMqtt(
         }
 
       } catch (err) {
-        console.error(`[MQTT] User ${userId}: Parse error:`, err);
+        mqttLog.error({ userId, err }, "Message parse error");
       }
     });
 
     client.on("error", (err) => {
-      console.error(`[MQTT] User ${userId}: Error:`, err.message);
+      mqttLog.error({ userId, err: err.message }, "MQTT error");
     });
 
     client.on("close", () => {
@@ -686,13 +687,13 @@ export function connectMqtt(
     });
 
     client.on("offline", () => {
-      console.log(`[MQTT] User ${userId}: Client offline`);
+      mqttLog.warn({ userId }, "Client offline");
     });
 
     // RC-4: Set up periodic DB persistence (every 30 seconds) with backpressure
     session.dbPersistInterval = setInterval(async () => {
       if (session.persistInFlight) {
-        console.log(`[MQTT] User ${userId}: Skipping DB persist — previous still in flight`);
+        mqttLog.debug({ userId }, "Skipping DB persist — previous still in flight");
         return;
       }
       if (session.dbPersistCallback && session.telemetry.connected && session.telemetry.grill > 0) {
@@ -704,7 +705,7 @@ export function connectMqtt(
             session.activeCook?.cookSessionId
           );
         } catch (err) {
-          console.error(`[MQTT] User ${userId}: DB persist error:`, err);
+          mqttLog.error({ userId, err }, "DB persist error");
         } finally {
           session.persistInFlight = false;
         }
@@ -728,7 +729,7 @@ export function connectMqtt(
           );
           session.lastPelletPersistTime = now;
         } catch (err) {
-          console.error(`[MQTT] User ${userId}: Pellet persist error:`, err);
+          mqttLog.error({ userId, err }, "Pellet persist error");
         } finally {
           session.pelletPersistInFlight = false;
         }
@@ -736,7 +737,7 @@ export function connectMqtt(
     }, 30000);
 
   } catch (err) {
-    console.error(`[MQTT] User ${userId}: Connection failed:`, err);
+    mqttLog.error({ userId, err }, "Connection failed");
   }
 }
 
@@ -887,7 +888,7 @@ export function startCookSession(
   };
   session.firedAlerts = [];
 
-  console.log(`[COOK] User ${userId}: Started cook session ${cookSessionId}`);
+  cookLog.info({ userId, cookSessionId }, "Started cook session");
 }
 
 export function endCookSession(userId: string): ActiveCookSession | null {
@@ -898,7 +899,7 @@ export function endCookSession(userId: string): ActiveCookSession | null {
   session.firedAlerts = [];
   // Stop all alarm escalations when cook ends
   dismissAllAlarms(userId);
-  console.log(`[COOK] User ${userId}: Ended cook session ${ended.cookSessionId}`);
+  cookLog.info({ userId, cookSessionId: ended.cookSessionId }, "Ended cook session");
   return ended;
 }
 
@@ -1043,7 +1044,7 @@ export function hydrateCookState(
   };
   session.firedAlerts = cookState.alerts.filter(a => a.status === "fired");
 
-  console.log(`[COOK] User ${userId}: Hydrated cook session ${cookState.cookSessionId} from DB`);
+  cookLog.info({ userId, cookSessionId: cookState.cookSessionId }, "Hydrated cook session from DB");
   return true;
 }
 
@@ -1107,7 +1108,7 @@ export function loadAutomationProgram(
       const tempCommand = JSON.stringify({ set: firstStage.grillTemp });
       session.sendCommandCallback(userId, tempCommand)
         .then(() => {
-          console.log(`[AUTO] User ${userId}: Set grill to ${firstStage.grillTemp}°F for phase 0 (${firstStage.name})`);
+          autoLog.info({ userId, grillTemp: firstStage.grillTemp, stageName: firstStage.name }, "Set grill temp for initial phase");
           pushAutomationEvent(userId, {
             eventType: "phase_change",
             phase: 0,
@@ -1117,7 +1118,7 @@ export function loadAutomationProgram(
           });
         })
         .catch((err: unknown) => {
-          console.error(`[AUTO] User ${userId}: Failed to set initial phase temp:`, err);
+          autoLog.error({ userId, err }, "Failed to set initial phase temp");
         });
     }
 
@@ -1128,7 +1129,7 @@ export function loadAutomationProgram(
     }
   }
 
-  console.log(`[AUTO] User ${userId}: Loaded automation program ${automationId} with ${stages.length} phases`);
+  autoLog.info({ userId, automationId, phaseCount: stages.length }, "Loaded automation program");
   return true;
 }
 
@@ -1153,7 +1154,7 @@ export function acknowledgeAutomationPhase(userId: string): boolean {
   // If this phase was waiting for acknowledgment, advance now
   if (stage.requireAcknowledge) {
     advanceAutomationPhase(userId, session);
-    console.log(`[AUTO] User ${userId}: Acknowledged phase ${phase} (${stage.name}), advancing`);
+    autoLog.info({ userId, phase, stageName: stage.name }, "Phase acknowledged, advancing");
     return true;
   }
 
@@ -1171,7 +1172,7 @@ export function skipAutomationPhase(userId: string): boolean {
   const stages = cook.automationStages!;
   if (cook.automationPhase >= stages.length - 1) return false;
 
-  console.log(`[AUTO] User ${userId}: Manual skip from phase ${cook.automationPhase}`);
+  autoLog.info({ userId, phase: cook.automationPhase }, "Manual skip from phase");
   advanceAutomationPhase(userId, session);
   return true;
 }

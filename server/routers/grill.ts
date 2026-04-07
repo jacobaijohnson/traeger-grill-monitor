@@ -9,7 +9,7 @@ import { getValidIdToken, ensureMqttConnected } from "./helpers";
 
 export const grillRouter = router({
   sendCommand: protectedProcedure
-    .input(z.object({ command: z.string() }))
+    .input(z.object({ command: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       const { idToken, session } = await getValidIdToken(ctx.user.id);
       if (!session.selectedGrillId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No grill selected" });
@@ -110,9 +110,9 @@ export const grillRouter = router({
 export const telemetryRouter = router({
   record: protectedProcedure
     .input(z.object({
-      grillId: z.string(),
-      cookSessionId: z.number().optional(),
-      grillTemp: z.number(),
+      grillId: z.string().max(128),
+      cookSessionId: z.number().int().min(1).optional(),
+      grillTemp: z.number().min(0).max(1200),
       probeTemp: z.number().optional(),
       ambientTemp: z.number().optional(),
       targetTemp: z.number().optional(),
@@ -134,13 +134,13 @@ export const telemetryRouter = router({
     }),
 
   recent: protectedProcedure
-    .input(z.object({ grillId: z.string(), minutes: z.number().default(60) }))
+    .input(z.object({ grillId: z.string().max(128), minutes: z.number().default(60) }))
     .query(async ({ ctx, input }) => {
       return getRecentTelemetry(ctx.user.id, input.grillId, input.minutes);
     }),
 
   forSession: protectedProcedure
-    .input(z.object({ cookSessionId: z.number() }))
+    .input(z.object({ cookSessionId: z.number().int().min(1) }))
     .query(async ({ ctx, input }) => {
       return getTelemetryForSession(input.cookSessionId, 1000, ctx.user.id);
     }),

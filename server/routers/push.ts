@@ -33,8 +33,8 @@ export const pushRouter = router({
       z.object({
         endpoint: z.string().url(),
         keys: z.object({
-          p256dh: z.string(),
-          auth: z.string(),
+          p256dh: z.string().max(512),
+          auth: z.string().max(512),
         }),
       })
     )
@@ -118,7 +118,7 @@ export const pushRouter = router({
    * Called from the service worker when user taps "Dismiss Alarm" or closes the notification.
    */
   dismissAlarm: protectedProcedure
-    .input(z.object({ alarmKey: z.string() }))
+    .input(z.object({ alarmKey: z.string().max(256) }))
     .mutation(async ({ ctx, input }) => {
       const dismissed = dismissAlarm(ctx.user.id, input.alarmKey);
       return { dismissed };

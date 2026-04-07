@@ -18,6 +18,7 @@ import { fromNodeHeaders } from "better-auth/node";
 // Track active SSE connections per user
 const sseClients = new Map<string, Set<Response>>();
 
+
 /**
  * Register a new SSE client for a user.
  */

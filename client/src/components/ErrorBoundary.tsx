@@ -11,6 +11,8 @@ interface State {
   error: Error | null;
 }
 
+const isDev = import.meta.env.DEV;
+
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -31,13 +33,32 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-4 text-foreground">
+              Something went wrong.
+            </h2>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
-              </pre>
-            </div>
+            <p className="text-muted-foreground text-center mb-6">
+              {isDev
+                ? "An unexpected error occurred. See the details below."
+                : "An unexpected error occurred. Please try reloading the page. If the problem persists, contact your administrator."}
+            </p>
+
+            {/* OBS-4: Only show stack traces in development */}
+            {isDev && this.state.error?.stack && (
+              <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+                <pre className="text-sm text-muted-foreground whitespace-break-spaces">
+                  {this.state.error.stack}
+                </pre>
+              </div>
+            )}
+
+            {!isDev && this.state.error && (
+              <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+                <p className="text-sm text-muted-foreground">
+                  Error: {this.state.error.message}
+                </p>
+              </div>
+            )}
 
             <button
               onClick={() => window.location.reload()}

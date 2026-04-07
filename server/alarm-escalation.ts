@@ -14,6 +14,7 @@
  */
 
 import { sendPushToUser, type PushPayload } from "./web-push";
+import { alarmLog } from "./logger";
 
 // ─── Configuration ─────────────────────────────────────
 
@@ -82,7 +83,7 @@ export function registerAlarm(
   activeAlarms.set(compositeKey, alarm);
   scheduleNextEscalation(compositeKey);
 
-  console.log(`[ALARM] Registered escalation: ${alarmKey} for user ${userId}`);
+  alarmLog.info({ userId, alarmKey }, "Registered escalation");
 }
 
 /**
@@ -100,9 +101,7 @@ export function dismissAlarm(userId: string, alarmKey: string): boolean {
   }
   activeAlarms.delete(compositeKey);
 
-  console.log(
-    `[ALARM] Dismissed: ${alarmKey} for user ${userId} after ${alarm.escalationCount} escalation(s)`
-  );
+  alarmLog.info({ userId, alarmKey, escalations: alarm.escalationCount }, "Alarm dismissed");
   return true;
 }
 
@@ -119,7 +118,7 @@ export function dismissAllAlarms(userId: string): number {
     }
   }
   if (dismissed > 0) {
-    console.log(`[ALARM] Dismissed all ${dismissed} alarm(s) for user ${userId}`);
+    alarmLog.info({ userId, dismissed }, "Dismissed all alarms");
   }
   return dismissed;
 }
@@ -185,9 +184,7 @@ function scheduleNextEscalation(compositeKey: string): void {
 
     // Auto-stop after max escalations
     if (current.escalationCount > MAX_ESCALATIONS) {
-      console.log(
-        `[ALARM] Auto-stopping ${current.alarmKey} for user ${current.userId} after ${MAX_ESCALATIONS} escalations`
-      );
+      alarmLog.info({ userId: current.userId, alarmKey: current.alarmKey, maxEscalations: MAX_ESCALATIONS }, "Auto-stopping alarm after max escalations");
       activeAlarms.delete(compositeKey);
       return;
     }
@@ -208,11 +205,9 @@ function scheduleNextEscalation(compositeKey: string): void {
     try {
       const sent = await sendPushToUser(current.userId, escalatedPayload);
       current.lastPushedAt = Date.now();
-      console.log(
-        `[ALARM] Escalation #${current.escalationCount} for ${current.alarmKey} → ${sent} device(s)`
-      );
+      alarmLog.info({ alarmKey: current.alarmKey, escalation: current.escalationCount, devices: sent }, "Escalation push sent");
     } catch (err) {
-      console.error(`[ALARM] Escalation push failed for ${current.alarmKey}:`, err);
+      alarmLog.error({ alarmKey: current.alarmKey, err }, "Escalation push failed");
     }
 
     // Schedule next escalation

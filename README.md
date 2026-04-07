@@ -133,6 +133,12 @@ services:
     ports:
       - 8420:8420
       # - 2000:2000  # uncomment if using TUNNEL_METRICS
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8420/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     depends_on:
       mysql:
         condition: service_healthy
@@ -183,8 +189,14 @@ docker run -d \
   -e BETTER_AUTH_URL=http://your-host:8420 \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=your-secure-password \
+  -e TUNNEL_TOKEN=              # optional — omit or leave empty to disable tunnel \
   -p 8420:8420 \
   -v /path/to/config:/config \
+  --health-cmd 'wget -qO- http://localhost:8420/api/health || exit 1' \
+  --health-interval 30s \
+  --health-timeout 5s \
+  --health-start-period 15s \
+  --health-retries 3 \
   --restart unless-stopped \
   ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
 ```
@@ -441,41 +453,52 @@ Internet → Cloudflare Edge (DDoS, TLS, WAF) → Tunnel → Container:8420
 1. **Create a tunnel** in the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) under Networks → Tunnels → Create a tunnel.
 2. **Configure the public hostname** to route your domain (e.g., `grill.example.com`) to `http://localhost:8420`.
 3. **Copy the tunnel token** from the dashboard.
-4. **Pass the token** to the container via environment variable or Docker secret:
+4. **Pass the token** to the container. The simplest approach is to add it to your existing `.env` file:
 
-**Environment variable** (simple):
-```yaml
-services:
-  traeger:
-    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
-    environment:
-      - TUNNEL_TOKEN=eyJhIjoiYWJj...  # Your tunnel token
-      - DATABASE_URL=mysql://...
-      - JWT_SECRET=...
-    volumes:
-      - ./config:/config
-    # No ports needed — traffic goes through the tunnel
-    restart: unless-stopped
+**Option A: Add to `.env`** (recommended for homelab):
+
+Uncomment the `TUNNEL_TOKEN` line in your `.env` file and paste your token:
+
+```env
+# ─── Cloudflare Tunnel (optional — omit to disable) ──────
+TUNNEL_TOKEN=eyJhIjoiYWJj...                        # from CF Zero Trust dashboard
+# TUNNEL_METRICS=0.0.0.0:2000                       # Prometheus metrics endpoint
 ```
 
-**Docker secret** (recommended for production):
+The main `docker-compose.yml` from the [Quick Start](#docker-compose-recommended) section already includes `TUNNEL_TOKEN=${TUNNEL_TOKEN:-}`, so no compose file changes are needed. When the tunnel is active, you can optionally remove the `ports:` section since all traffic flows through Cloudflare:
+
+```yaml
+    # ports:
+    #   - 8420:8420    # not needed when using tunnel
+```
+
+**Option B: Docker secret** (recommended for Swarm / production):
+
+Create a file containing only the token, then add a `secrets:` block to your compose file:
+
+```
+traeger/
+├── docker-compose.yml
+├── .env
+├── tunnel_token.txt     ← contains only the raw token string
+└── config/
+```
+
+Add these lines to your `docker-compose.yml`:
+
 ```yaml
 services:
   traeger:
-    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
-    environment:
-      - DATABASE_URL=mysql://...
-      - JWT_SECRET=...
+    # ... existing config ...
     secrets:
       - tunnel_token
-    volumes:
-      - ./config:/config
-    restart: unless-stopped
 
 secrets:
   tunnel_token:
-    file: ./tunnel_token.txt  # File containing only the token
+    file: ./tunnel_token.txt
 ```
+
+When a Docker secret is present, the container reads `/run/secrets/tunnel_token` automatically and ignores the `TUNNEL_TOKEN` environment variable.
 
 The tunnel service waits for the application to pass its health check before connecting to Cloudflare, ensuring traffic is never routed to an unready instance.
 
@@ -493,20 +516,19 @@ The application enforces its own authentication independently of the tunnel. Eve
 
 When `TUNNEL_METRICS` is set to a `host:port` value (e.g., `0.0.0.0:2000`), `cloudflared` exposes a Prometheus-compatible metrics endpoint at `http://<host>:<port>/metrics`. This provides real-time visibility into tunnel health, connection counts, request latency, and error rates. The metrics endpoint is only active when both `TUNNEL_TOKEN` and `TUNNEL_METRICS` are set.
 
+To enable metrics, uncomment both lines in your `.env` file:
+
+```env
+TUNNEL_TOKEN=eyJhIjoiYWJj...
+TUNNEL_METRICS=0.0.0.0:2000
+```
+
+Then uncomment the metrics port in your `docker-compose.yml`:
+
 ```yaml
-services:
-  traeger:
-    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
-    environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
-      - TUNNEL_METRICS=0.0.0.0:2000
-      - DATABASE_URL=mysql://...
-      - JWT_SECRET=...
     ports:
-      - 2000:2000  # Expose metrics port (LAN only)
-    volumes:
-      - ./config:/config
-    restart: unless-stopped
+      - 8420:8420
+      - 2000:2000  # Tunnel metrics (LAN only — do not expose to internet)
 ```
 
 **Available metrics** include:
@@ -578,7 +600,20 @@ The application exposes four operational endpoints that require no authenticatio
 | `GET /api/metrics` | Returns runtime metrics: active MQTT sessions, SSE client count, active alarms, heap usage, uptime. |
 | `GET /api/version` | Returns build metadata: version, Node.js version, PID, startup timestamp. |
 
-The Docker image includes a `HEALTHCHECK` instruction that pings `/api/health` every 30 seconds. Docker Compose, Swarm, and Kubernetes will automatically restart unhealthy containers.
+Both the Docker image (`HEALTHCHECK` instruction) and the `docker-compose.yml` include a health check that pings `/api/health` every 30 seconds. Docker reports the container as `healthy`, `unhealthy`, or `starting` based on the response. You can check the status at any time:
+
+```bash
+# Quick status — shows (healthy), (unhealthy), or (health: starting)
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+
+# Detailed health log with last 5 check results
+docker inspect --format '{{json .State.Health}}' traeger-grill-monitor | python3 -m json.tool
+
+# Watch health in real-time
+watch -n5 'docker inspect --format "{{.State.Health.Status}}" traeger-grill-monitor'
+```
+
+Docker Compose, Swarm, and Kubernetes will automatically restart unhealthy containers when `restart: unless-stopped` is set.
 
 ### Health Check Response
 
@@ -712,6 +747,7 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v0.3.3 | 2026-04-07 | Docker Compose healthcheck, synced compose with README, refactored tunnel docs, fixed `DATABASE_URL` mismatch, Docker CLI health flags |
 | v0.3.2 | 2026-04-07 | Tunnel + s6 health in `/api/health`, new `/api/health/services` endpoint, `.env` example in README, 15 new tests |
 | v0.3.1 | 2026-04-07 | Tunnel Prometheus metrics (`TUNNEL_METRICS`), scrape config examples, 11 new tests |
 | v0.3.0 | 2026-04-07 | Embedded Cloudflare Tunnel support (cloudflared via s6-overlay), Docker secrets for tunnel token, health-gated startup, 26 new tests |

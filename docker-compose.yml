@@ -3,13 +3,17 @@
 # Default port: 8420 (IANA unassigned, no homelab conflicts)
 #
 # Quick start:
-#   1. Copy this file and adjust environment variables
+#   1. Create a .env file with your secrets (see README for template)
 #   2. docker compose up -d
 #   3. Access at http://<your-host>:8420
-#   4. First user to register becomes the admin (via ADMIN_EMAIL/ADMIN_PASSWORD)
+#   4. Admin account is created from ADMIN_EMAIL/ADMIN_PASSWORD on first boot
 #
 # For external MySQL/MariaDB:
-#   Set DATABASE_URL and remove the mysql service below.
+#   Set DATABASE_URL in .env and remove the mysql service below.
+#
+# For Cloudflare Tunnel:
+#   Set TUNNEL_TOKEN in .env — no other changes needed.
+#   Optionally remove the ports: section since traffic flows through the tunnel.
 
 services:
   traeger:
@@ -19,28 +23,39 @@ services:
     #   context: .
     #   dockerfile: Dockerfile
     container_name: traeger-grill-monitor
-    ports:
-      - "8420:8420"
     environment:
       # ─── LSIO Standard ─────────────────────────────
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
-      - TZ=${TZ:-America/Los_Angeles}
+      - TZ=${TZ:-America/New_York}
       # ─── App Config ────────────────────────────────
       - NODE_ENV=production
       - PORT=8420
-      - DATABASE_URL=mysql://traeger:${MYSQL_PASSWORD:-traeger_pass}@mysql:3306/traeger_dashboard
-      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET to a random 64-char string}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env (openssl rand -hex 32)}
       # ─── Better Auth ───────────────────────────────
-      # Set this to your external URL if behind a reverse proxy
+      # Set BETTER_AUTH_URL to your external URL if behind a reverse proxy
       - BETTER_AUTH_URL=${BETTER_AUTH_URL:-http://localhost:8420}
       # ─── Admin Bootstrap ───────────────────────────
       # On first boot, creates an admin user with these credentials.
-      # Remove after first login if desired.
+      # Remove from .env after first login if desired.
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # ─── Cloudflare Tunnel (optional) ──────────────
+      # Set TUNNEL_TOKEN in .env to enable. No ports needed when active.
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:-}
+      - TUNNEL_METRICS=${TUNNEL_METRICS:-}
     volumes:
       - ${CONFIG_PATH:-./config}:/config
+    ports:
+      - 8420:8420
+      # - 2000:2000  # Uncomment if using TUNNEL_METRICS for Prometheus scraping
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8420/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     depends_on:
       mysql:
         condition: service_healthy

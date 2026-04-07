@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-04-07
+
+### Added
+
+- **Docker Compose healthcheck**: Added explicit `healthcheck` block to the `traeger` service in `docker-compose.yml` (pings `/api/health` every 30s). Matches the Dockerfile `HEALTHCHECK` instruction. Docker now reports `healthy`/`unhealthy`/`starting` status via `docker ps`.
+- **Docker health check commands in README**: Added `docker ps`, `docker inspect`, and `watch` examples to the Health Monitoring section for checking container health status from the host.
+- **Docker CLI healthcheck flags**: The `docker run` example now includes `--health-cmd`, `--health-interval`, `--health-timeout`, `--health-start-period`, and `--health-retries` flags.
+- **TUNNEL_TOKEN in docker CLI example**: The `docker run` example now includes the optional `TUNNEL_TOKEN` env var.
+
+### Changed
+
+- **docker-compose.yml synced with README**: The actual compose file now includes `TUNNEL_TOKEN`, `TUNNEL_METRICS`, uses `${DATABASE_URL}` from `.env` (instead of inline construction), and matches the README example exactly.
+- **Cloudflare Tunnel setup docs refactored**: Tunnel section now references the main `.env` file and `docker-compose.yml` from Quick Start instead of showing partial standalone snippets. Option A (`.env`) and Option B (Docker secret) are clearly separated with file structure diagrams.
+- **Tunnel Metrics docs simplified**: Instructions now reference uncommenting lines in the existing `.env` and compose files rather than showing separate compose snippets.
+- **Timezone default updated**: Changed default timezone from `America/Los_Angeles` to `America/New_York` in docker-compose.yml for consistency with README.
+
+### Fixed
+
+- **docker-compose.yml `DATABASE_URL` mismatch**: The compose file was constructing `DATABASE_URL` inline (`mysql://traeger:${MYSQL_PASSWORD}@mysql:3306/traeger_dashboard`) instead of reading `${DATABASE_URL}` from `.env`, which conflicted with the README instructions.
+
 ## [0.3.2] - 2026-04-07
 
 ### Added

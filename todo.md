@@ -548,3 +548,22 @@
 - [x] Push on phaseChange (automation stage transitions)
 - [x] Push on escalatingAlarm (persistent alarms)
 - [x] Respect per-user notification preferences (sendPushIfEnabled checks prefs before sending)
+
+## Auth UI Audit
+- [x] Verify login page works (form, validation, error handling, redirect)
+- [x] Verify register page works (form, validation, invite code support, mode-aware)
+- [x] Verify logout flow (sidebar button, session cleared, redirect to login)
+- [x] Verify forgot password page (console-only flow, clear messaging)
+- [x] Verify settings page (profile, Traeger account, push notifications)
+- [x] All auth UI properly implemented — see audit results above
+
+## Persistent Repeating Alarms (Option 3)
+- [x] Server-side alarm escalation: track active alarms in memory, re-push every 2 min if not dismissed
+- [x] Client-side audio alarm loop: Web Audio API synthesized tone via useAlarmAudio hook
+- [x] Alarm dismissal flow: client dismiss → server acknowledge → stop escalation timer
+- [x] Alarm types: escalatingAlarm, critical temperature alerts, probe disconnect
+- [x] AlarmBanner UI component: pulsing red overlay with per-alarm dismiss buttons
+- [x] Service worker ALARM_START/ALARM_STOP message passing to client windows
+- [x] Push router endpoints: dismissAlarm, dismissAllAlarms, getActiveAlarms
+- [x] Test alarm escalation (18 tests for register, dismiss, escalation, auto-stop)
+- [x] 353 tests passing across 14 test files

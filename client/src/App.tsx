@@ -18,6 +18,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DashboardLayout from "./components/DashboardLayout";
+import { AlarmBanner } from "./components/AlarmBanner";
 
 function Router() {
   return (
@@ -61,6 +62,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
+          <AlarmBanner />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

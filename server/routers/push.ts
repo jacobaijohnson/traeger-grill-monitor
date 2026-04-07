@@ -10,6 +10,11 @@ import {
   setNotificationPreferences,
   sendPushToUser,
 } from "../web-push";
+import {
+  dismissAlarm,
+  dismissAllAlarms,
+  getActiveAlarms,
+} from "../alarm-escalation";
 
 export const pushRouter = router({
   /**
@@ -106,5 +111,31 @@ export const pushRouter = router({
       url: "/settings",
     });
     return { sent: count };
+  }),
+
+  /**
+   * Dismiss an active alarm (stops server-side escalation re-pushes).
+   * Called from the service worker when user taps "Dismiss Alarm" or closes the notification.
+   */
+  dismissAlarm: protectedProcedure
+    .input(z.object({ alarmKey: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const dismissed = dismissAlarm(ctx.user.id, input.alarmKey);
+      return { dismissed };
+    }),
+
+  /**
+   * Dismiss all active alarms for the current user.
+   */
+  dismissAllAlarms: protectedProcedure.mutation(async ({ ctx }) => {
+    const count = dismissAllAlarms(ctx.user.id);
+    return { dismissed: count };
+  }),
+
+  /**
+   * Get all active alarms for the current user (for UI display).
+   */
+  getActiveAlarms: protectedProcedure.query(async ({ ctx }) => {
+    return getActiveAlarms(ctx.user.id);
   }),
 });

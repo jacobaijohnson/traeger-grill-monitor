@@ -20,6 +20,8 @@ Built for the homelab community. Runs as a single Docker container following [Li
 
 **Push Notifications** delivers real-time alerts to your phone or desktop even when the browser tab is closed. Powered by the Web Push API with auto-generated VAPID keys. Get notified for temperature alerts, stall detection, stall recovery, cook phase changes, and escalating alarms. Per-user notification preferences let each user choose which alerts they want to receive.
 
+**Persistent Alarm System** ensures critical alerts cannot be silently missed. When an alarm-type alert fires (temperature target reached, grill disconnected, escalating cook alarm), the server re-pushes the notification every 2 minutes with increasing urgency for up to 30 minutes. If the app is open, a synthesized audio alarm tone plays through the Web Audio API with an escalating pattern (faster warble, higher pitch over time). A red pulsing banner appears at the top of the screen with per-alarm dismiss buttons. Dismissing from any surface (notification action, in-app banner, or closing the notification) stops both the audio loop and the server-side escalation.
+
 **Admin Access Control** provides flexible registration modes (closed, invite-only, email allowlist, open) so you control who can access your instance. Admin users manage invites, allowlists, and user roles from a built-in settings panel.
 
 **Console-Only Password Reset** keeps the stack simple with no SMTP dependency. When a user requests a password reset, the reset link is logged to the Docker container console. The admin copies the link and shares it directly. No email server configuration needed.

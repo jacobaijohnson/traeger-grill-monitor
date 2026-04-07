@@ -3,6 +3,7 @@ import type { TraegerTelemetry, AutomationStage } from "@shared/traeger-types";
 import type { TempMarker } from "@shared/meat-science";
 import { pushTelemetryUpdate, pushAlertEvent, pushDisconnectEvent, pushAutomationEvent } from "./sse";
 import { sendPushIfEnabled } from "./web-push";
+import { registerAlarm, dismissAlarm, dismissAllAlarms } from "./alarm-escalation";
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -345,14 +346,16 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       });
 
       console.log(`[AUTO] User ${userId}: Escalating alarm at ${Math.round(probeTemp)}°F (phase ${phase}: ${stage.name})`);
-      // Web Push: escalating alarm
-      sendPushIfEnabled(userId, "escalatingAlarm", {
+      // Web Push: escalating alarm + register for persistent re-push
+      const escalatingPayload = {
         title: `⚠️ ${stage.name} — ${Math.round(probeTemp)}°F`,
         body: alarm.message!,
         tag: alarm.id,
         url: "/live-cook",
-        alarm: true,
-      }).catch(() => {});
+        alarm: true as const,
+      };
+      sendPushIfEnabled(userId, "escalatingAlarm", escalatingPayload).catch(() => {});
+      registerAlarm(userId, alarm.id, escalatingPayload);
     }
   }
 
@@ -636,13 +639,18 @@ export function connectMqtt(
             alertType: alert.alertType,
           });
           // Web Push: alert fired
-          sendPushIfEnabled(userId, "alertFired", {
+          const alertPayload = {
             title: alert.alertType === "alarm" ? `🚨 ${alert.label}` : `🔔 ${alert.label}`,
             body: alert.message || `${alert.label} reached!`,
             tag: alert.id,
             url: "/live-cook",
             alarm: alert.alertType === "alarm",
-          }).catch(() => {});
+          };
+          sendPushIfEnabled(userId, "alertFired", alertPayload).catch(() => {});
+          // Register alarm-type alerts for persistent re-push escalation
+          if (alert.alertType === "alarm") {
+            registerAlarm(userId, alert.id, { ...alertPayload, alarm: true });
+          }
         }
 
       } catch (err) {
@@ -660,13 +668,16 @@ export function connectMqtt(
         // P3: Notify SSE clients of disconnect
         pushDisconnectEvent(userId, "MQTT connection closed");
         // Web Push: probe/connection disconnect
-        sendPushIfEnabled(userId, "probeDisconnect", {
+        const disconnectTag = `disconnect-${Date.now()}`;
+        const disconnectPayload = {
           title: "⚠️ Grill Disconnected",
           body: "MQTT connection to your grill was lost. Check your WiFi and grill power.",
-          tag: `disconnect-${Date.now()}`,
+          tag: disconnectTag,
           url: "/settings",
-          alarm: true,
-        }).catch(() => {});
+          alarm: true as const,
+        };
+        sendPushIfEnabled(userId, "probeDisconnect", disconnectPayload).catch(() => {});
+        registerAlarm(userId, disconnectTag, disconnectPayload);
       }
     });
 
@@ -882,11 +893,11 @@ export function startCookSession(
 export function endCookSession(userId: string): ActiveCookSession | null {
   const session = sessions.get(userId);
   if (!session?.activeCook) return null;
-
   const ended = { ...session.activeCook };
   session.activeCook = null;
   session.firedAlerts = [];
-
+  // Stop all alarm escalations when cook ends
+  dismissAllAlarms(userId);
   console.log(`[COOK] User ${userId}: Ended cook session ${ended.cookSessionId}`);
   return ended;
 }
@@ -905,6 +916,8 @@ export function dismissAlert(userId: string, alertId: string): boolean {
   const alert = session.activeCook.alerts.find((a) => a.id === alertId);
   if (alert && alert.status === "fired") {
     alert.status = "dismissed";
+    // Stop alarm escalation for this alert
+    dismissAlarm(userId, alertId);
     return true;
   }
   return false;

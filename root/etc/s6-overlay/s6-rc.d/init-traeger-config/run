@@ -23,11 +23,10 @@ if [ -n "${DATABASE_URL}" ]; then
     # Wait for MySQL to be ready (up to 60 seconds)
     RETRIES=0
     MAX_RETRIES=30
-    until node -e "
-      const mysql = require('mysql2/promise');
-      mysql.createConnection(process.env.DATABASE_URL)
-        .then(c => { c.end(); process.exit(0); })
-        .catch(() => process.exit(1));
+    until node --input-type=module -e "
+      import mysql from 'mysql2/promise';
+      const c = await mysql.createConnection(process.env.DATABASE_URL);
+      await c.end();
     " 2>/dev/null; do
         RETRIES=$((RETRIES + 1))
         if [ "${RETRIES}" -ge "${MAX_RETRIES}" ]; then

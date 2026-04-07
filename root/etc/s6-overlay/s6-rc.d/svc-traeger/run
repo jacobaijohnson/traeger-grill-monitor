@@ -1,7 +1,12 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-echo "Starting Traeger Smoker Insight on port ${PORT:-8420}..."
+# Map JWT_SECRET to BETTER_AUTH_SECRET if not already set
+if [ -z "${BETTER_AUTH_SECRET}" ] && [ -n "${JWT_SECRET}" ]; then
+    export BETTER_AUTH_SECRET="${JWT_SECRET}"
+fi
+
+echo "Starting Traeger Grill Monitor on port ${PORT:-8420}..."
 
 cd /app
 

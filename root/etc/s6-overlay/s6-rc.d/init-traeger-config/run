@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
 
-echo "─── Traeger Smoker Insight: Initializing ───"
+echo "─── Traeger Grill Monitor: Initializing ───"
 
 # Ensure /config directory exists and has correct ownership
 mkdir -p /config
@@ -12,4 +12,50 @@ lsiown -R abc:abc /config
 # Set ownership of app directory
 lsiown -R abc:abc /app
 
-echo "─── Traeger Smoker Insight: Config initialized ───"
+# ─── Database Migrations ─────────────────────────────────
+# Run migrations if DATABASE_URL is set.
+# This creates Better Auth tables (user, session, account, verification)
+# and all application tables (traeger_sessions, telemetry_readings, etc.)
+# Idempotent: safe to run on every container start.
+if [ -n "${DATABASE_URL}" ]; then
+    echo "─── Traeger Grill Monitor: Running database migrations ───"
+
+    # Wait for MySQL to be ready (up to 60 seconds)
+    RETRIES=0
+    MAX_RETRIES=30
+    until node -e "
+      const mysql = require('mysql2/promise');
+      mysql.createConnection(process.env.DATABASE_URL)
+        .then(c => { c.end(); process.exit(0); })
+        .catch(() => process.exit(1));
+    " 2>/dev/null; do
+        RETRIES=$((RETRIES + 1))
+        if [ "${RETRIES}" -ge "${MAX_RETRIES}" ]; then
+            echo "─── Traeger Grill Monitor: WARNING — MySQL not ready after ${MAX_RETRIES} attempts ───"
+            echo "─── Traeger Grill Monitor: Skipping migrations, app may fail to start ───"
+            break
+        fi
+        echo "─── Traeger Grill Monitor: Waiting for MySQL... (attempt ${RETRIES}/${MAX_RETRIES}) ───"
+        sleep 2
+    done
+
+    if [ "${RETRIES}" -lt "${MAX_RETRIES}" ]; then
+        # Map JWT_SECRET to BETTER_AUTH_SECRET if not already set
+        if [ -z "${BETTER_AUTH_SECRET}" ] && [ -n "${JWT_SECRET}" ]; then
+            export BETTER_AUTH_SECRET="${JWT_SECRET}"
+        fi
+
+        cd /app
+        node dist/migrate.js
+        MIGRATE_EXIT=$?
+        if [ "${MIGRATE_EXIT}" -ne 0 ]; then
+            echo "─── Traeger Grill Monitor: WARNING — Migration exited with code ${MIGRATE_EXIT} ───"
+        else
+            echo "─── Traeger Grill Monitor: Migrations complete ✓ ───"
+        fi
+    fi
+else
+    echo "─── Traeger Grill Monitor: DATABASE_URL not set, skipping migrations ───"
+fi
+
+echo "─── Traeger Grill Monitor: Config initialized ───"

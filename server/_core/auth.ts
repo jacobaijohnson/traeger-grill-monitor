@@ -48,6 +48,7 @@ function buildTrustedOrigins(): string[] {
 }
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET || process.env.JWT_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || undefined,
   database: createAuthPool(),
   emailAndPassword: {

@@ -3,7 +3,7 @@
 # Default port: 8420 (IANA unassigned, no homelab conflicts)
 
 # ─── Stage 1: Build client + server ──────────────────────
-FROM node:22-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 

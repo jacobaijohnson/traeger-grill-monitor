@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-07
+
+### Added
+
+- **Cloudflare Tunnel support**: Embedded `cloudflared` binary in the Docker image with an s6-overlay service that activates when `TUNNEL_TOKEN` is set. Exposes the application to the internet via Cloudflare's edge network without opening inbound firewall ports, configuring a reverse proxy, or managing TLS certificates.
+- **Docker secrets support for tunnel token**: The s6 service checks `/run/secrets/tunnel_token` first, then falls back to the `TUNNEL_TOKEN` environment variable. Recommended for production deployments.
+- **Health-gated tunnel startup**: The tunnel waits for the application's `/api/health` endpoint to respond before connecting to Cloudflare, preventing traffic from reaching an unready instance.
+- **Security warning on tunnel startup**: Logs a warning if `DATABASE_URL` is not set when the tunnel is active, since application auth requires a database.
+- **Multi-architecture cloudflared**: Dockerfile detects CPU architecture (amd64, arm64, armv7) and downloads the correct binary.
+- **26 new tests**: Comprehensive test coverage for Dockerfile changes, s6 service structure, run script behavior, and documentation completeness.
+
+### Changed
+
+- **Architecture diagram**: Updated to show the optional `cloudflared` service alongside the Node.js application.
+- **Parameters table**: Added `TUNNEL_TOKEN` to the README parameters reference.
+- **ENV_TEMPLATE.md**: Added `TUNNEL_TOKEN` to the optional variables section with security guidance.
+
 ## [0.2.1] - 2026-04-07
 
 ### Changed

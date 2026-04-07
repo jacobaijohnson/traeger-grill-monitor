@@ -30,6 +30,7 @@ Copy these into a `.env` file next to your `docker-compose.yml`.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `8420` | Internal container port (rarely needs changing) |
+| `TUNNEL_TOKEN` | _(none)_ | Cloudflare Tunnel token. Enables outbound-only tunnel to Cloudflare's edge. See README for setup. |
 | `CONFIG_PATH` | `./config` | Host path for persistent config volume |
 | `MYSQL_ROOT_PASSWORD` | `rootpass` | Root password for bundled MySQL |
 | `MYSQL_PASSWORD` | `traeger_pass` | User password for bundled MySQL |
@@ -53,6 +54,9 @@ TZ=America/New_York
 # MySQL (if using bundled service)
 MYSQL_ROOT_PASSWORD=change-me
 MYSQL_PASSWORD=change-me-too
+
+# Cloudflare Tunnel (optional — omit to disable)
+# TUNNEL_TOKEN=eyJhIjoiYWJj...
 ```
 
 ## Notes
@@ -65,3 +69,4 @@ MYSQL_PASSWORD=change-me-too
 - The `/config` volume stores persistent application data
 - `PUID`/`PGID` ensure correct file ownership on NAS systems (Synology, Unraid, TrueNAS)
 - If using a reverse proxy (Traefik, SWAG, Nginx Proxy Manager), set `BETTER_AUTH_URL` to your external URL
+- **`TUNNEL_TOKEN` is a sensitive credential** — prefer Docker secrets (`/run/secrets/tunnel_token`) over plain env vars. The container checks for the secret file first, then falls back to the env var. Never commit the token to version control.

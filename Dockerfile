@@ -47,14 +47,26 @@ LABEL org.opencontainers.image.licenses="MIT"
 ENV \
   NODE_ENV=production \
   HOME=/app \
-  PORT=8420
+  PORT=8420 \
+  TUNNEL_TOKEN=""
 
-# Install Node.js runtime (no build tools needed)
+# Install Node.js runtime and cloudflared (Cloudflare Tunnel client)
 RUN \
   echo "**** install runtime packages ****" && \
   apk add --no-cache \
     nodejs \
     npm && \
+  echo "**** install cloudflared ****" && \
+  ARCH=$(uname -m) && \
+  case "${ARCH}" in \
+    x86_64)  CF_ARCH="amd64" ;; \
+    aarch64) CF_ARCH="arm64" ;; \
+    armv7l)  CF_ARCH="arm" ;; \
+    *)       echo "Unsupported arch: ${ARCH}"; exit 1 ;; \
+  esac && \
+  wget -q -O /usr/local/bin/cloudflared \
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" && \
+  chmod +x /usr/local/bin/cloudflared && \
   echo "**** create app directory ****" && \
   mkdir -p /app && \
   echo "**** cleanup ****" && \

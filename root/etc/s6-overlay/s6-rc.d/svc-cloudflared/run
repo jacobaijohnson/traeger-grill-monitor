@@ -1,0 +1,63 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# ─── Cloudflare Tunnel Service ────────────────────────────
+# Activated by setting TUNNEL_TOKEN env var or providing a
+# Docker secret at /run/secrets/tunnel_token.
+#
+# If neither is set, the service sleeps indefinitely
+# (s6 requires longrun services to not exit).
+#
+# Security: The tunnel token is a sensitive credential.
+# Prefer Docker secrets over plain env vars in production.
+# ──────────────────────────────────────────────────────────
+
+# ─── Resolve tunnel token (Docker secret takes priority) ──
+TOKEN="${TUNNEL_TOKEN}"
+
+if [ -f /run/secrets/tunnel_token ]; then
+    TOKEN=$(cat /run/secrets/tunnel_token | tr -d '[:space:]')
+    echo "─── Cloudflare Tunnel: Token loaded from Docker secret ───"
+fi
+
+if [ -z "${TOKEN}" ]; then
+    echo "─── Cloudflare Tunnel: No token found, tunnel disabled ───"
+    echo "─── Set TUNNEL_TOKEN env var or mount /run/secrets/tunnel_token ───"
+    # s6 longrun services must not exit; sleep forever
+    exec sleep infinity
+fi
+
+# ─── Security check: warn if auth-critical env vars are missing ──
+if [ -z "${DATABASE_URL}" ]; then
+    echo "─── Cloudflare Tunnel: WARNING — DATABASE_URL not set ───"
+    echo "─── Application auth requires a database. Tunnel will start, ───"
+    echo "─── but the app may not enforce authentication properly.    ───"
+fi
+
+echo "─── Cloudflare Tunnel: Starting tunnel ───"
+echo "─── Cloudflare Tunnel: Waiting for app to be ready... ───"
+
+# Wait for the main app to be healthy before starting the tunnel.
+# This prevents cloudflared from routing traffic to an unready app.
+RETRIES=0
+MAX_RETRIES=30
+until wget -qO- "http://localhost:${PORT:-8420}/api/health" >/dev/null 2>&1; do
+    RETRIES=$((RETRIES + 1))
+    if [ "${RETRIES}" -ge "${MAX_RETRIES}" ]; then
+        echo "─── Cloudflare Tunnel: App not ready after ${MAX_RETRIES} attempts, starting tunnel anyway ───"
+        break
+    fi
+    sleep 2
+done
+
+echo "─── Cloudflare Tunnel: App ready, connecting to Cloudflare edge ───"
+
+# Run cloudflared as the abc user (respects PUID/PGID)
+# --no-autoupdate: we manage updates via Docker image rebuilds
+# --protocol quic: prefer QUIC for lower latency (falls back to http2)
+exec \
+    s6-setuidgid abc \
+        /usr/local/bin/cloudflared tunnel \
+            --no-autoupdate \
+            --protocol quic \
+            run \
+            --token "${TOKEN}"

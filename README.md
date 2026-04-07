@@ -167,6 +167,7 @@ Containers are configured using parameters passed at runtime. These parameters a
 | `-e ADMIN_EMAIL` | Email for bootstrap admin account (created on first boot) |
 | `-e ADMIN_PASSWORD` | Password for bootstrap admin account (minimum 8 characters) |
 | `-e PORT=8420` | Internal container port. Rarely needs changing. |
+| `-e TUNNEL_TOKEN` | Cloudflare Tunnel token. If set, the container connects to Cloudflare's edge network automatically. See [Cloudflare Tunnel](#cloudflare-tunnel) below. |
 | `-v /config` | Persistent application data |
 
 ---
@@ -243,6 +244,12 @@ id your_user
 │  │  tRPC Server  │◄──►│  served by Express   │  │
 │  └───────┬───────┘    └──────────────────────┘  │
 │          │                                      │
+│          │    ┌──────────────────────────────┐  │
+│          │    │  cloudflared (optional)       │  │
+│          │    │  Tunnel → Cloudflare Edge     │  │
+│          │    │  Activated by TUNNEL_TOKEN    │  │
+│          │    └──────────────────────────────┘  │
+│          │                                      │
 │          ├── Better Auth (sessions, users)       │
 │          ├── MQTT Manager (per-user connections) │
 │          ├── SSE Hub (real-time push to browser) │
@@ -303,7 +310,7 @@ pnpm install
 # Start dev server (Express + Vite HMR)
 pnpm dev
 
-# Run tests (422 tests across 15 files)
+# Run tests (448 tests across 16 files)
 pnpm test
 
 # Type check
@@ -358,6 +365,79 @@ Registration is **closed by default**. The admin must explicitly open registrati
 | `invite` | Users must provide a valid invite code |
 | `allowlist` | Only pre-approved email addresses can register |
 | `open` | Anyone can register |
+
+---
+
+## Cloudflare Tunnel
+
+The container includes an embedded [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/) client (`cloudflared`) that can expose the application to the internet without opening any inbound firewall ports, configuring a reverse proxy, or managing TLS certificates. When a tunnel token is provided, the container establishes an outbound-only encrypted connection to Cloudflare's global edge network. When no token is provided, the tunnel service sleeps and has zero impact on the application.
+
+### How It Works
+
+Traffic flows through Cloudflare's network rather than directly to your server. Your home IP address is never exposed, DDoS protection is applied automatically, and TLS certificates are managed by Cloudflare. The application's own authentication (invite-only registration, session-based auth, rate limiting) serves as the access control layer.
+
+```
+Internet → Cloudflare Edge (DDoS, TLS, WAF) → Tunnel → Container:8420
+                                                         ├── App Auth
+                                                         └── Rate Limiting
+```
+
+### Setup
+
+1. **Create a tunnel** in the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) under Networks → Tunnels → Create a tunnel.
+2. **Configure the public hostname** to route your domain (e.g., `grill.example.com`) to `http://localhost:8420`.
+3. **Copy the tunnel token** from the dashboard.
+4. **Pass the token** to the container via environment variable or Docker secret:
+
+**Environment variable** (simple):
+```yaml
+services:
+  traeger:
+    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiYWJj...  # Your tunnel token
+      - DATABASE_URL=mysql://...
+      - JWT_SECRET=...
+    volumes:
+      - ./config:/config
+    # No ports needed — traffic goes through the tunnel
+    restart: unless-stopped
+```
+
+**Docker secret** (recommended for production):
+```yaml
+services:
+  traeger:
+    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
+    environment:
+      - DATABASE_URL=mysql://...
+      - JWT_SECRET=...
+    secrets:
+      - tunnel_token
+    volumes:
+      - ./config:/config
+    restart: unless-stopped
+
+secrets:
+  tunnel_token:
+    file: ./tunnel_token.txt  # File containing only the token
+```
+
+The tunnel service waits for the application to pass its health check before connecting to Cloudflare, ensuring traffic is never routed to an unready instance.
+
+### Security Considerations
+
+The tunnel token is a **highly sensitive credential**. If compromised, an attacker could hijack the tunnel routing and redirect traffic. Treat it with the same care as a database password:
+
+- Prefer Docker secrets (`/run/secrets/tunnel_token`) over plain environment variables.
+- Never commit the token to version control.
+- Rotate the token in the Cloudflare dashboard if you suspect it has been exposed.
+
+The application enforces its own authentication independently of the tunnel. Even if someone reaches the application through Cloudflare, they still face invite-only registration, session-based auth, rate limiting (5 req/min on login), and role-based access control. This creates a double barrier: Cloudflare's network-level protection plus the application's own auth stack.
+
+### Disabling the Tunnel
+
+To disable the tunnel, simply remove the `TUNNEL_TOKEN` environment variable (or the Docker secret) and restart the container. The `cloudflared` service will detect the missing token and sleep indefinitely with no resource usage. No other configuration changes are needed.
 
 ---
 
@@ -465,6 +545,7 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v0.3.0 | 2026-04-07 | Embedded Cloudflare Tunnel support (cloudflared via s6-overlay), Docker secrets for tunnel token, health-gated startup, 26 new tests |
 | v0.2.1 | 2026-04-07 | Node.js 24 LTS upgrade, dependency updates (31 npm + 5 CI actions + Alpine 3.23), Dependabot ignore rules |
 | v0.2.0 | 2026-04-07 | Documentation audit, Dependabot, CI fixes, graceful DB degradation, stale reference cleanup |
 | v0.1.1 | 2026-04-07 | Enterprise hardening: structured logging (pino), health/metrics/version endpoints, graceful shutdown, rate limiting, input validation bounds, lazy loading, Docker HEALTHCHECK, stale session reaper, telemetry purge, 4 new DB indexes, log aggregation stack |

@@ -6,6 +6,20 @@ Built for the homelab community. Runs as a single Docker container following [Li
 
 ---
 
+## Screenshots
+
+<!-- Replace these placeholders with actual screenshots from your running instance -->
+
+| Dashboard | Live Cook | Cook History |
+|:---------:|:---------:|:------------:|
+| *Screenshot coming soon* | *Screenshot coming soon* | *Screenshot coming soon* |
+
+| Cook Programs | Pellet Analytics | Push Notifications |
+|:-------------:|:----------------:|:------------------:|
+| *Screenshot coming soon* | *Screenshot coming soon* | *Screenshot coming soon* |
+
+---
+
 ## Features
 
 **Live Grill Monitoring** connects directly to Traeger's MQTT broker via your existing Traeger account credentials. The dashboard streams real-time grill temperature, probe temperature, and grill state with sub-second updates through Server-Sent Events.

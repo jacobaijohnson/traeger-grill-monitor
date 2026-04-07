@@ -120,5 +120,15 @@ AUDIT-REPORT.md
 GITHUB-PUSH-PLAN.md
 todo.md
 
+# Internal design docs (kept locally, not published)
+ARCHITECTURE.md
+AUTOMATION_DESIGN.md
+DSS_CLASSIFICATION.md
+ENV_TEMPLATE.md
+LIVE-COOK-ARCHITECTURE.md
+RACE_CONDITIONS.md
+SPEC_FORGE_REVIEW.md
+UX_DESIGN_NOTES.md
+
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json

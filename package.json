@@ -1,7 +1,17 @@
 {
-  "name": "traeger-dashboard",
-  "version": "1.0.0",
+  "name": "traeger-smoker-insight",
+  "version": "0.1.0",
+  "description": "Real-time Traeger grill monitoring dashboard with cook tracking, pellet analytics, and multi-grill support. Self-hosted via Docker.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jacobj/traeger-smoker-insight.git"
+  },
+  "homepage": "https://github.com/jacobj/traeger-smoker-insight",
+  "bugs": {
+    "url": "https://github.com/jacobj/traeger-smoker-insight/issues"
+  },
+  "author": "jacobj",
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",

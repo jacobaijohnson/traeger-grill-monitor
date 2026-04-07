@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      - name: Generate changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configuration: |
+            {
+              "categories": [
+                { "title": "## New Features", "labels": ["feat", "feature"] },
+                { "title": "## Bug Fixes", "labels": ["fix", "bug"] },
+                { "title": "## Performance", "labels": ["perf", "performance"] },
+                { "title": "## Security", "labels": ["security"] },
+                { "title": "## Documentation", "labels": ["docs"] },
+                { "title": "## Other Changes", "labels": [] }
+              ],
+              "template": "#{{CHANGELOG}}\n\n**Full Changelog**: #{{RELEASE_DIFF}}"
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ## Docker
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            Or update your `docker-compose.yml`:
+            ```yaml
+            image: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Quick Start
+
+            See the [README](https://github.com/${{ github.repository }}#usage) for full setup instructions.
+          files: |
+            docker-compose.yml
+            docker-compose.logging.yml
+          generate_release_notes: true
+          make_latest: true

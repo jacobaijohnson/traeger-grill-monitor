@@ -116,6 +116,9 @@ temp/
 screenshot-*.md
 screenshot-*.txt
 design-notes.md
+AUDIT-REPORT.md
+GITHUB-PUSH-PLAN.md
+todo.md
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json

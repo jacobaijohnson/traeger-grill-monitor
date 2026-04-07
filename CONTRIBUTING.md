@@ -8,7 +8,7 @@ Thank you for your interest in contributing. This guide covers how to set up a d
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 24+
 - pnpm 10+
 - MySQL 8.0+ (or use the Docker Compose MySQL service)
 - Docker (for building and testing the container image)

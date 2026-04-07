@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-07
+
+### Changed
+
+- **Node.js 22 → 24 LTS**: Upgraded runtime across Dockerfile, CI workflow, and documentation to Node.js 24 (Active LTS through Apr 2028)
+- **Dependabot ignore rules**: Added major-version ignore rules for Node.js Docker image, TypeScript, vitest, superjson, recharts, lucide-react, @types/node, and @vitejs/plugin-react to prevent disruptive auto-PRs
+- **Dependency updates**: Merged 31 minor/patch npm updates, 5 GitHub Actions version bumps (setup-node v6, build-push-action v7, action-setup v5, setup-qemu-action v4, login-action v4), and Alpine base image 3.21 → 3.23
+- Added LTS-if-available policy comment to dependabot.yml
+
+### Fixed
+
+- Reverted accidental Node.js 25 (Current) merge — project targets LTS releases only
+- Closed 8 risky major-version Dependabot PRs with review comments (Node 25, TypeScript 6, vitest 4, superjson 2, recharts 3, lucide-react 1.7, @types/node 25, @vitejs/plugin-react)
+
 ## [0.2.0] - 2026-04-07
 
 ### Added

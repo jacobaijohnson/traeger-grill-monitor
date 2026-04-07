@@ -49,7 +49,7 @@ Built for the homelab community. Runs as a single Docker container following [Li
 | x86-64 | Yes |
 | arm64 | Yes |
 
-The multi-stage Dockerfile builds on `node:22-alpine` and produces a final image from `ghcr.io/linuxserver/baseimage-alpine:3.21`.
+The multi-stage Dockerfile builds on `node:24-alpine` and produces a final image from `ghcr.io/linuxserver/baseimage-alpine:3.23`.
 
 ---
 
@@ -287,7 +287,7 @@ cd traeger-grill-monitor
 # Build the Docker image
 docker build -t traeger-grill-monitor:local .
 
-# Or run in development mode (requires Node.js 22+)
+# Or run in development mode (requires Node.js 24+)
 pnpm install
 pnpm dev
 ```
@@ -465,6 +465,7 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v0.2.1 | 2026-04-07 | Node.js 24 LTS upgrade, dependency updates (31 npm + 5 CI actions + Alpine 3.23), Dependabot ignore rules |
 | v0.2.0 | 2026-04-07 | Documentation audit, Dependabot, CI fixes, graceful DB degradation, stale reference cleanup |
 | v0.1.1 | 2026-04-07 | Enterprise hardening: structured logging (pino), health/metrics/version endpoints, graceful shutdown, rate limiting, input validation bounds, lazy loading, Docker HEALTHCHECK, stale session reaper, telemetry purge, 4 new DB indexes, log aggregation stack |
 | v0.1.0 | 2026-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Web Push notifications, Docker/LSIO |

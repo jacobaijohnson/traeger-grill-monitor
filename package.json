@@ -1,6 +1,6 @@
 {
   "name": "traeger-grill-monitor",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Real-time Traeger grill monitoring dashboard with cook tracking, pellet analytics, and multi-grill support. Self-hosted via Docker.",
   "type": "module",
   "repository": {

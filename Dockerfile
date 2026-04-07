@@ -31,7 +31,7 @@ RUN pnpm run build
 RUN pnpm prune --prod
 
 # ─── Stage 2: Production (LSIO base) ─────────────────────
-FROM ghcr.io/linuxserver/baseimage-alpine:3.21
+FROM ghcr.io/linuxserver/baseimage-alpine:3.23
 
 # Set version labels (LSIO convention)
 ARG BUILD_DATE

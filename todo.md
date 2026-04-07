@@ -613,3 +613,9 @@
 
 ## Project Rename
 - [x] Rename all references from traeger-smoker-insight to traeger-grill-monitor (114 replacements across 22 files)
+
+## GitHub Push
+- [ ] Layer 1: Session content audit (github-sanitizer)
+- [ ] Layer 2: File/code scan (github-sanitizer)
+- [ ] Fix any violations
+- [ ] Push to GitHub as traeger-grill-monitor

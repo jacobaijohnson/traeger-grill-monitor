@@ -284,5 +284,5 @@ export async function getRatingDistribution(userId: string, grillId?: string): P
     return Array.from(dist.entries())
       .map(([rating, count]) => ({ rating, count }))
       .sort((a, b) => a.rating - b.rating);
-  }, "getRatingDistribution") ?? [];
+  }, "getRatingDistribution") ?? [1, 2, 3, 4, 5].map(r => ({ rating: r, count: 0 }));
 }

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-04-07
+
+### Added
+
+- **Tunnel Prometheus metrics**: Set `TUNNEL_METRICS=0.0.0.0:2000` to expose a `/metrics` endpoint from `cloudflared` with request counts, error rates, latency histograms, and HA connection status. Only active when both `TUNNEL_TOKEN` and `TUNNEL_METRICS` are set.
+- **Metrics documentation**: README now includes a Tunnel Metrics subsection with available metrics table, docker-compose example with port mapping, and Prometheus scrape config.
+- **11 new tests**: Coverage for `TUNNEL_METRICS` env var in Dockerfile, `--metrics` flag in run script, and metrics documentation completeness.
+
+### Changed
+
+- **Run script refactored**: Cloudflared arguments now built via bash array for cleaner conditional flag construction.
+
 ## [0.3.0] - 2026-04-07
 
 ### Added

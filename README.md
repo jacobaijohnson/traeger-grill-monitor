@@ -168,6 +168,7 @@ Containers are configured using parameters passed at runtime. These parameters a
 | `-e ADMIN_PASSWORD` | Password for bootstrap admin account (minimum 8 characters) |
 | `-e PORT=8420` | Internal container port. Rarely needs changing. |
 | `-e TUNNEL_TOKEN` | Cloudflare Tunnel token. If set, the container connects to Cloudflare's edge network automatically. See [Cloudflare Tunnel](#cloudflare-tunnel) below. |
+| `-e TUNNEL_METRICS` | Host:port for tunnel Prometheus metrics (e.g., `0.0.0.0:2000`). Only active when `TUNNEL_TOKEN` is set. See [Tunnel Metrics](#tunnel-metrics) below. |
 | `-v /config` | Persistent application data |
 
 ---
@@ -310,7 +311,7 @@ pnpm install
 # Start dev server (Express + Vite HMR)
 pnpm dev
 
-# Run tests (448 tests across 16 files)
+# Run tests (459 tests across 16 files)
 pnpm test
 
 # Type check
@@ -435,6 +436,50 @@ The tunnel token is a **highly sensitive credential**. If compromised, an attack
 
 The application enforces its own authentication independently of the tunnel. Even if someone reaches the application through Cloudflare, they still face invite-only registration, session-based auth, rate limiting (5 req/min on login), and role-based access control. This creates a double barrier: Cloudflare's network-level protection plus the application's own auth stack.
 
+### Tunnel Metrics
+
+When `TUNNEL_METRICS` is set to a `host:port` value (e.g., `0.0.0.0:2000`), `cloudflared` exposes a Prometheus-compatible metrics endpoint at `http://<host>:<port>/metrics`. This provides real-time visibility into tunnel health, connection counts, request latency, and error rates. The metrics endpoint is only active when both `TUNNEL_TOKEN` and `TUNNEL_METRICS` are set.
+
+```yaml
+services:
+  traeger:
+    image: ghcr.io/jacobaijohnson/traeger-grill-monitor:latest
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - TUNNEL_METRICS=0.0.0.0:2000
+      - DATABASE_URL=mysql://...
+      - JWT_SECRET=...
+    ports:
+      - 2000:2000  # Expose metrics port (LAN only)
+    volumes:
+      - ./config:/config
+    restart: unless-stopped
+```
+
+**Available metrics** include:
+
+| Metric | Description |
+|--------|-------------|
+| `cloudflared_tunnel_total_requests` | Total requests proxied through the tunnel |
+| `cloudflared_tunnel_request_errors` | Total failed requests |
+| `cloudflared_tunnel_concurrent_requests_per_tunnel` | Active in-flight requests |
+| `cloudflared_tunnel_response_by_code` | Response count by HTTP status code |
+| `cloudflared_tunnel_request_duration_seconds` | Request latency histogram |
+| `cloudflared_tunnel_server_locations` | Connected Cloudflare edge locations |
+| `cloudflared_tunnel_ha_connections` | Active tunnel connections (HA) |
+
+**Grafana integration**: If you are using the included Grafana + Loki stack, add a Prometheus data source pointing to `http://traeger-grill-monitor:2000` and import a `cloudflared` dashboard. Example Prometheus scrape config for a standalone Prometheus instance:
+
+```yaml
+scrape_configs:
+  - job_name: cloudflared
+    static_configs:
+      - targets: ['traeger-grill-monitor:2000']
+    scrape_interval: 15s
+```
+
+The metrics port should only be exposed on your local network. Do not expose port 2000 to the internet — the tunnel itself handles external traffic securely.
+
 ### Disabling the Tunnel
 
 To disable the tunnel, simply remove the `TUNNEL_TOKEN` environment variable (or the Docker secret) and restart the container. The `cloudflared` service will detect the missing token and sleep indefinitely with no resource usage. No other configuration changes are needed.
@@ -545,6 +590,7 @@ If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect
 
 | Version | Date | Description |
 |---------|------|-------------|
+| v0.3.1 | 2026-04-07 | Tunnel Prometheus metrics (`TUNNEL_METRICS`), scrape config examples, 11 new tests |
 | v0.3.0 | 2026-04-07 | Embedded Cloudflare Tunnel support (cloudflared via s6-overlay), Docker secrets for tunnel token, health-gated startup, 26 new tests |
 | v0.2.1 | 2026-04-07 | Node.js 24 LTS upgrade, dependency updates (31 npm + 5 CI actions + Alpine 3.23), Dependabot ignore rules |
 | v0.2.0 | 2026-04-07 | Documentation audit, Dependabot, CI fixes, graceful DB degradation, stale reference cleanup |

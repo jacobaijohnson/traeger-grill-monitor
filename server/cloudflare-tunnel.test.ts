@@ -38,6 +38,10 @@ describe("Cloudflare Tunnel: Dockerfile", () => {
   it("sets TUNNEL_TOKEN env var with empty default", () => {
     expect(dockerfile).toMatch(/TUNNEL_TOKEN\s*=\s*""/);
   });
+
+  it("sets TUNNEL_METRICS env var with empty default", () => {
+    expect(dockerfile).toMatch(/TUNNEL_METRICS\s*=\s*""/);
+  });
 });
 
 describe("Cloudflare Tunnel: s6 Service Definition", () => {
@@ -123,6 +127,19 @@ describe("Cloudflare Tunnel: Run Script Behavior", () => {
   it("passes token via --token flag (not env var) for security", () => {
     expect(runScript).toMatch(/--token\s+.*TOKEN/);
   });
+
+  it("conditionally enables --metrics when TUNNEL_METRICS is set", () => {
+    expect(runScript).toContain("TUNNEL_METRICS");
+    expect(runScript).toContain("--metrics");
+  });
+
+  it("logs the metrics endpoint URL when metrics are enabled", () => {
+    expect(runScript).toMatch(/metrics.*http/i);
+  });
+
+  it("uses bash array for cloudflared arguments (clean arg construction)", () => {
+    expect(runScript).toContain("CLOUDFLARED_ARGS");
+  });
 });
 
 describe("Cloudflare Tunnel: Documentation", () => {
@@ -170,5 +187,49 @@ describe("Cloudflare Tunnel: Documentation", () => {
 
   it("ENV_TEMPLATE.md warns about token sensitivity", () => {
     expect(envTemplate).toMatch(/sensitive credential/i);
+  });
+});
+
+describe("Cloudflare Tunnel: Metrics Documentation", () => {
+  const readme = fs.readFileSync(
+    path.join(projectRoot, "README.md"),
+    "utf-8"
+  );
+  const envTemplate = fs.readFileSync(
+    path.join(projectRoot, "ENV_TEMPLATE.md"),
+    "utf-8"
+  );
+
+  it("README has a Tunnel Metrics subsection", () => {
+    expect(readme).toContain("### Tunnel Metrics");
+  });
+
+  it("README documents TUNNEL_METRICS env var in Parameters table", () => {
+    expect(readme).toMatch(/TUNNEL_METRICS.*Prometheus/);
+  });
+
+  it("README includes available cloudflared metrics table", () => {
+    expect(readme).toContain("cloudflared_tunnel_total_requests");
+    expect(readme).toContain("cloudflared_tunnel_request_errors");
+    expect(readme).toContain("cloudflared_tunnel_ha_connections");
+  });
+
+  it("README includes Prometheus scrape config example", () => {
+    expect(readme).toContain("scrape_configs");
+    expect(readme).toContain("job_name: cloudflared");
+  });
+
+  it("README warns not to expose metrics port to the internet", () => {
+    expect(readme).toMatch(/[Dd]o not expose.*2000.*internet/);
+  });
+
+  it("README includes docker-compose example with metrics port", () => {
+    expect(readme).toContain("2000:2000");
+    expect(readme).toContain("TUNNEL_METRICS=0.0.0.0:2000");
+  });
+
+  it("ENV_TEMPLATE.md documents TUNNEL_METRICS", () => {
+    expect(envTemplate).toContain("TUNNEL_METRICS");
+    expect(envTemplate).toContain("0.0.0.0:2000");
   });
 });

@@ -48,7 +48,8 @@ ENV \
   NODE_ENV=production \
   HOME=/app \
   PORT=8420 \
-  TUNNEL_TOKEN=""
+  TUNNEL_TOKEN="" \
+  TUNNEL_METRICS=""
 
 # Install Node.js runtime and cloudflared (Cloudflare Tunnel client)
 RUN \

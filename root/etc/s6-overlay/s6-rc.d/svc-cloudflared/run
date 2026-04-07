@@ -7,6 +7,9 @@
 # If neither is set, the service sleeps indefinitely
 # (s6 requires longrun services to not exit).
 #
+# Optional: Set TUNNEL_METRICS to a host:port (e.g., 0.0.0.0:2000)
+# to expose Prometheus-compatible metrics for tunnel health.
+#
 # Security: The tunnel token is a sensitive credential.
 # Prefer Docker secrets over plain env vars in production.
 # ──────────────────────────────────────────────────────────
@@ -51,13 +54,28 @@ done
 
 echo "─── Cloudflare Tunnel: App ready, connecting to Cloudflare edge ───"
 
+# ─── Build cloudflared arguments ──
+CLOUDFLARED_ARGS=(
+    tunnel
+    --no-autoupdate
+    --protocol quic
+)
+
+# Enable Prometheus metrics endpoint if TUNNEL_METRICS is set
+# Example: TUNNEL_METRICS=0.0.0.0:2000
+if [ -n "${TUNNEL_METRICS}" ]; then
+    CLOUDFLARED_ARGS+=(--metrics "${TUNNEL_METRICS}")
+    echo "─── Cloudflare Tunnel: Prometheus metrics at http://${TUNNEL_METRICS}/metrics ───"
+fi
+
+CLOUDFLARED_ARGS+=(
+    run
+    --token "${TOKEN}"
+)
+
 # Run cloudflared as the abc user (respects PUID/PGID)
 # --no-autoupdate: we manage updates via Docker image rebuilds
 # --protocol quic: prefer QUIC for lower latency (falls back to http2)
 exec \
     s6-setuidgid abc \
-        /usr/local/bin/cloudflared tunnel \
-            --no-autoupdate \
-            --protocol quic \
-            run \
-            --token "${TOKEN}"
+        /usr/local/bin/cloudflared "${CLOUDFLARED_ARGS[@]}"

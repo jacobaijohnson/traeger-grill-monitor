@@ -31,6 +31,7 @@ Copy these into a `.env` file next to your `docker-compose.yml`.
 |----------|---------|-------------|
 | `PORT` | `8420` | Internal container port (rarely needs changing) |
 | `TUNNEL_TOKEN` | _(none)_ | Cloudflare Tunnel token. Enables outbound-only tunnel to Cloudflare's edge. See README for setup. |
+| `TUNNEL_METRICS` | _(none)_ | Host:port for Prometheus metrics endpoint (e.g., `0.0.0.0:2000`). Only active when `TUNNEL_TOKEN` is set. |
 | `CONFIG_PATH` | `./config` | Host path for persistent config volume |
 | `MYSQL_ROOT_PASSWORD` | `rootpass` | Root password for bundled MySQL |
 | `MYSQL_PASSWORD` | `traeger_pass` | User password for bundled MySQL |
@@ -57,6 +58,7 @@ MYSQL_PASSWORD=change-me-too
 
 # Cloudflare Tunnel (optional — omit to disable)
 # TUNNEL_TOKEN=eyJhIjoiYWJj...
+# TUNNEL_METRICS=0.0.0.0:2000
 ```
 
 ## Notes

@@ -94,12 +94,12 @@ describe("RC-5: SSE module safety", () => {
 
   it("pushTelemetryUpdate should not throw for non-existent user", async () => {
     const { pushTelemetryUpdate } = await import("./sse");
-    expect(() => pushTelemetryUpdate(77777)).not.toThrow();
+    expect(() => pushTelemetryUpdate("77777")).not.toThrow();
   });
 
   it("pushAlertEvent should not throw for non-existent user", async () => {
     const { pushAlertEvent } = await import("./sse");
-    expect(() => pushAlertEvent(77777, {
+    expect(() => pushAlertEvent("77777", {
       id: "test",
       label: "Test Alert",
       message: "Test",
@@ -109,7 +109,7 @@ describe("RC-5: SSE module safety", () => {
 
   it("pushDisconnectEvent should not throw for non-existent user", async () => {
     const { pushDisconnectEvent } = await import("./sse");
-    expect(() => pushDisconnectEvent(77777, "test disconnect")).not.toThrow();
+    expect(() => pushDisconnectEvent("77777", "test disconnect")).not.toThrow();
   });
 });
 

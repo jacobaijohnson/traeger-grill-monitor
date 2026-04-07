@@ -604,3 +604,9 @@
 - [x] Write tests for input validation bounds (3 test suites)
 - [x] Write tests for structured logger (4 tests)
 - [x] 402 tests passing across 15 test files
+
+## Final Hardening Pass
+- [x] Apply 0009_hardening_indexes.sql to production database (4 indexes created)
+- [x] Add express-rate-limit: 4-tier rate limiting (auth 20/min, login 5/min, admin 30/min, API 200/min)
+- [x] Add log aggregation: docker-compose.logging.yml overlay with Grafana + Loki + Promtail
+- [x] 422 tests passing across 15 test files

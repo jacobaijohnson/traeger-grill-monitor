@@ -372,10 +372,83 @@ location / {
 
 ---
 
+## Health Monitoring
+
+The application exposes three operational endpoints that require no authentication:
+
+| Endpoint | Purpose |
+|----------|--------|
+| `GET /api/health` | Returns 200 if the app is ready (DB connected, VAPID initialized), 503 if degraded. Includes memory stats. Used by Docker HEALTHCHECK and reverse proxy probes. |
+| `GET /api/metrics` | Returns runtime metrics: active MQTT sessions, SSE client count, active alarms, heap usage, uptime. |
+| `GET /api/version` | Returns build metadata: version, Node.js version, PID, startup timestamp. |
+
+The Docker image includes a `HEALTHCHECK` instruction that pings `/api/health` every 30 seconds. Docker Compose, Swarm, and Kubernetes will automatically restart unhealthy containers.
+
+---
+
+## Rate Limiting
+
+All API endpoints are rate-limited per IP address to prevent brute-force attacks and abuse:
+
+| Endpoint | Limit | Purpose |
+|----------|-------|--------|
+| `/api/auth/*` | 20 req/min | Better Auth sign-in, sign-up, session |
+| `/api/trpc/traeger.connect` | 5 req/min | Traeger credential exchange (strictest) |
+| `/api/trpc/admin.*` | 30 req/min | Admin operations |
+| `/api/trpc/*` | 200 req/min | All other tRPC procedures |
+
+Rate limit headers (`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`) are included in all responses per the IETF draft standard. When a limit is exceeded, the server returns `429 Too Many Requests` with a JSON error body.
+
+For deployments behind a reverse proxy, `trust proxy` is enabled so rate limiting uses `X-Forwarded-For` instead of the proxy's IP.
+
+---
+
+## Log Aggregation
+
+In production, the application outputs structured JSON logs via [pino](https://getpino.io/) to stdout. Each log line includes a timestamp, level, module name, and contextual fields (userId, grillId, etc.). Sensitive fields (passwords, tokens, VAPID keys) are automatically redacted.
+
+An optional Grafana + Loki + Promtail stack is included for log aggregation and visualization:
+
+```bash
+# Start with log aggregation
+docker compose -f docker-compose.yml -f docker-compose.logging.yml up -d
+```
+
+This adds three containers:
+
+| Service | Port | Purpose |
+|---------|------|--------|
+| Grafana | 3100 | Log visualization dashboard |
+| Loki | (internal) | Log storage and query engine |
+| Promtail | (internal) | Collects Docker container logs |
+
+Grafana is pre-configured with Loki as the default data source. Default credentials are `admin`/`admin` (change on first login).
+
+Example LogQL queries in Grafana:
+
+```logql
+# All MQTT module logs
+{container_name="traeger-smoker-insight"} | json | module="mqtt"
+
+# All errors
+{container_name="traeger-smoker-insight"} | json | level="error"
+
+# Alarm events
+{container_name="traeger-smoker-insight"} | json | module="alarm"
+
+# Error rate over 5 minutes
+rate({container_name="traeger-smoker-insight"} | json | level="error" [5m])
+```
+
+If you already have a log aggregation stack (Datadog, ELK, etc.), simply collect stdout from the `traeger-smoker-insight` container. The JSON format is compatible with any pino-aware log parser.
+
+---
+
 ## Versions
 
 | Date | Description |
 |------|-------------|
+| 2025-04-07 | Enterprise hardening: structured logging (pino), health/metrics/version endpoints, graceful shutdown, rate limiting, input validation bounds, lazy loading, Docker HEALTHCHECK, stale session reaper, telemetry purge, 4 new DB indexes, log aggregation stack |
 | 2025-04-06 | Initial release: live monitoring, cook sessions, pellet tracking, cook programs, multi-grill, admin panel, Better Auth, Web Push notifications, Docker/LSIO |
 
 ---

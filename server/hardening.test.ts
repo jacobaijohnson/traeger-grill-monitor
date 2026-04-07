@@ -527,6 +527,157 @@ describe("Regression: Critical file integrity", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// SEC-4: Rate Limiting
+// ═══════════════════════════════════════════════════════════
+
+describe("SEC-4: Rate Limiting Module", () => {
+  const rateLimitSource = fs.readFileSync(
+    path.join(projectRoot, "server/rate-limit.ts"),
+    "utf-8"
+  );
+
+  it("exports authLimiter for /api/auth/* routes", () => {
+    expect(rateLimitSource).toContain("export const authLimiter");
+  });
+
+  it("exports loginLimiter for traeger.connect (5 req/min)", () => {
+    expect(rateLimitSource).toContain("export const loginLimiter");
+    // Should be very strict — 5 requests per minute
+    expect(rateLimitSource).toMatch(/max:\s*5/);
+  });
+
+  it("exports apiLimiter for general API (200 req/min)", () => {
+    expect(rateLimitSource).toContain("export const apiLimiter");
+    expect(rateLimitSource).toMatch(/max:\s*200/);
+  });
+
+  it("exports adminLimiter for admin endpoints (30 req/min)", () => {
+    expect(rateLimitSource).toContain("export const adminLimiter");
+    expect(rateLimitSource).toMatch(/max:\s*30/);
+  });
+
+  it("exports trpcLoginLimiter middleware for path-based routing", () => {
+    expect(rateLimitSource).toContain("export function trpcLoginLimiter");
+    expect(rateLimitSource).toContain("traeger.connect");
+    expect(rateLimitSource).toContain("admin.");
+  });
+
+  it("logs rate limit violations", () => {
+    expect(rateLimitSource).toContain("rate limit exceeded");
+  });
+
+  it("returns 429 status code on limit exceeded", () => {
+    expect(rateLimitSource).toContain("429");
+  });
+
+  it("uses standard rate limit headers (not legacy)", () => {
+    expect(rateLimitSource).toContain("standardHeaders: true");
+    expect(rateLimitSource).toContain("legacyHeaders: false");
+  });
+});
+
+describe("SEC-4: Rate Limiting Wiring in index.ts", () => {
+  const indexSource = fs.readFileSync(
+    path.join(projectRoot, "server/_core/index.ts"),
+    "utf-8"
+  );
+
+  it("imports rate limiters from rate-limit module", () => {
+    expect(indexSource).toContain('from "../rate-limit"');
+  });
+
+  it("applies authLimiter to /api/auth", () => {
+    expect(indexSource).toContain('app.use("/api/auth", authLimiter)');
+  });
+
+  it("applies trpcLoginLimiter to /api/trpc", () => {
+    expect(indexSource).toContain('app.use("/api/trpc", trpcLoginLimiter)');
+  });
+
+  it("applies apiLimiter to /api/trpc", () => {
+    expect(indexSource).toContain('app.use("/api/trpc", apiLimiter)');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Log Aggregation Stack
+// ═══════════════════════════════════════════════════════════
+
+describe("Log Aggregation: Docker Compose Overlay", () => {
+  it("docker-compose.logging.yml exists", () => {
+    expect(
+      fs.existsSync(path.join(projectRoot, "docker-compose.logging.yml"))
+    ).toBe(true);
+  });
+
+  it("includes Loki, Promtail, and Grafana services", () => {
+    const compose = fs.readFileSync(
+      path.join(projectRoot, "docker-compose.logging.yml"),
+      "utf-8"
+    );
+    expect(compose).toContain("loki:");
+    expect(compose).toContain("promtail:");
+    expect(compose).toContain("grafana:");
+  });
+
+  it("Grafana datasource provisioning exists", () => {
+    expect(
+      fs.existsSync(path.join(projectRoot, "grafana-datasources.yml"))
+    ).toBe(true);
+    const ds = fs.readFileSync(
+      path.join(projectRoot, "grafana-datasources.yml"),
+      "utf-8"
+    );
+    expect(ds).toContain("loki");
+    expect(ds).toContain("http://loki:3100");
+  });
+
+  it("Promtail config exists and targets Docker containers", () => {
+    expect(
+      fs.existsSync(path.join(projectRoot, "promtail-config.yml"))
+    ).toBe(true);
+    const config = fs.readFileSync(
+      path.join(projectRoot, "promtail-config.yml"),
+      "utf-8"
+    );
+    expect(config).toContain("docker_sd_configs");
+    expect(config).toContain("traeger");
+  });
+
+  it("Promtail parses JSON logs from traeger container", () => {
+    const config = fs.readFileSync(
+      path.join(projectRoot, "promtail-config.yml"),
+      "utf-8"
+    );
+    expect(config).toContain("json");
+    expect(config).toContain("level");
+    expect(config).toContain("module");
+  });
+});
+
+describe("Log Aggregation: README Documentation", () => {
+  const readme = fs.readFileSync(path.join(projectRoot, "README.md"), "utf-8");
+
+  it("documents health monitoring endpoints", () => {
+    expect(readme).toContain("## Health Monitoring");
+    expect(readme).toContain("/api/health");
+    expect(readme).toContain("/api/metrics");
+    expect(readme).toContain("/api/version");
+  });
+
+  it("documents rate limiting", () => {
+    expect(readme).toContain("## Rate Limiting");
+    expect(readme).toContain("429");
+  });
+
+  it("documents log aggregation with Loki/Grafana", () => {
+    expect(readme).toContain("## Log Aggregation");
+    expect(readme).toContain("docker-compose.logging.yml");
+    expect(readme).toContain("LogQL");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 // Helper: Recursively get all .ts files
 // ═══════════════════════════════════════════════════════════
 

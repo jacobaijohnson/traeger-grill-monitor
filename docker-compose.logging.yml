@@ -1,0 +1,72 @@
+# ─── Traeger Smoker Insight — Log Aggregation Overlay ─────
+#
+# Optional Grafana + Loki + Promtail stack for structured log aggregation.
+# Traeger already outputs pino JSON logs to stdout in production.
+#
+# Usage (merge with base compose):
+#   docker compose -f docker-compose.yml -f docker-compose.logging.yml up -d
+#
+# Access:
+#   Grafana:  http://<your-host>:3100
+#   Loki API: http://<your-host>:3200 (internal, not exposed by default)
+#
+# Default Grafana credentials: admin / admin (change on first login)
+#
+# What you get:
+#   - All container logs (traeger + mysql) automatically collected
+#   - Pre-configured Loki data source in Grafana
+#   - JSON log fields (module, userId, grillId, etc.) queryable via LogQL
+#
+# Example LogQL queries:
+#   {container_name="traeger-smoker-insight"} | json | module="mqtt"
+#   {container_name="traeger-smoker-insight"} | json | level="error"
+#   {container_name="traeger-smoker-insight"} | json | module="alarm"
+#   rate({container_name="traeger-smoker-insight"} | json | level="error" [5m])
+
+services:
+  # ─── Loki: Log storage and query engine ────────────────
+  loki:
+    image: grafana/loki:3.4.2
+    container_name: traeger-loki
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    # Internal only — Grafana connects via Docker network
+    # Uncomment to expose Loki API externally:
+    # ports:
+    #   - "3200:3100"
+    restart: unless-stopped
+
+  # ─── Promtail: Log collector (reads Docker logs) ───────
+  promtail:
+    image: grafana/promtail:3.4.2
+    container_name: traeger-promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # ─── Grafana: Visualization dashboard ──────────────────
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: traeger-grafana
+    ports:
+      - "${GRAFANA_PORT:-3100}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/loki.yml:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  loki_data:
+  grafana_data:

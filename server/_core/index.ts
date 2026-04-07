@@ -3,7 +3,7 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import { authLimiter, apiLimiter, trpcLoginLimiter } from "../rate-limit";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./auth";
@@ -129,24 +129,8 @@ async function startServer() {
     crossOriginEmbedderPolicy: false, // Allow embedding for various auth flows
   }));
 
-  // ─── Rate Limiting ─────────────────────────────────
-  // General API rate limit: 200 requests per minute per IP
-  const apiLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 200,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many requests, please try again later." },
-  });
-
-  // Stricter limit for auth endpoints: 20 per minute
-  const authLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: "Too many authentication attempts, please try again later." },
-  });
+  // ─── Rate Limiting (SEC-4) ─────────────────────────
+  // See server/rate-limit.ts for full strategy documentation
 
   // ─── SEC-5: Reduced JSON body limit (5MB default) ──
   app.use(express.json({ limit: "5mb" }));
@@ -158,6 +142,9 @@ async function startServer() {
   // ─── Better Auth ───────────────────────────────────
   // Apply auth rate limit to Better Auth routes
   app.use("/api/auth", authLimiter);
+
+  // Apply login-specific rate limit to tRPC (traeger.connect + admin.*)
+  app.use("/api/trpc", trpcLoginLimiter);
 
   // Mount Better Auth handler for all /api/auth/* routes
   // Handles: sign-in, sign-up, sign-out, session, etc.

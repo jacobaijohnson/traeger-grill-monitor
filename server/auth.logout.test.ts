@@ -294,16 +294,17 @@ describe("s6-log rotation services", () => {
     expect(runScript).toMatch(/n\d+/);
   });
 
-  it("svc-traeger-log is wired as consumer of svc-traeger", () => {
-    expect(fs.existsSync(path.join(s6Root, "svc-traeger-log/consumer-for/svc-traeger"))).toBe(true);
-    expect(fs.existsSync(path.join(s6Root, "svc-traeger/producer-for/svc-traeger-log"))).toBe(true);
+  it("svc-traeger-log is wired as consumer of svc-traeger (plain files)", () => {
+    // s6-overlay v3: producer-for, consumer-for, pipeline-name are plain files, not directories
+    const consumerFor = fs.readFileSync(path.join(s6Root, "svc-traeger-log/consumer-for"), "utf-8").trim();
+    expect(consumerFor).toBe("svc-traeger");
+    const producerFor = fs.readFileSync(path.join(s6Root, "svc-traeger/producer-for"), "utf-8").trim();
+    expect(producerFor).toBe("svc-traeger-log");
   });
 
-  it("svc-traeger-log has pipeline-name", () => {
-    const pipelineDir = path.join(s6Root, "svc-traeger-log/pipeline-name");
-    expect(fs.existsSync(pipelineDir)).toBe(true);
-    const files = fs.readdirSync(pipelineDir);
-    expect(files.length).toBeGreaterThan(0);
+  it("svc-traeger-log has pipeline-name file", () => {
+    const pipelineName = fs.readFileSync(path.join(s6Root, "svc-traeger-log/pipeline-name"), "utf-8").trim();
+    expect(pipelineName).toContain("svc-traeger");
   });
 
   it("svc-traeger-log is registered in user bundle", () => {
@@ -323,9 +324,11 @@ describe("s6-log rotation services", () => {
     expect(runScript).toMatch(/n\d+/);
   });
 
-  it("svc-cloudflared-log is wired as consumer of svc-cloudflared", () => {
-    expect(fs.existsSync(path.join(s6Root, "svc-cloudflared-log/consumer-for/svc-cloudflared"))).toBe(true);
-    expect(fs.existsSync(path.join(s6Root, "svc-cloudflared/producer-for/svc-cloudflared-log"))).toBe(true);
+  it("svc-cloudflared-log is wired as consumer of svc-cloudflared (plain files)", () => {
+    const consumerFor = fs.readFileSync(path.join(s6Root, "svc-cloudflared-log/consumer-for"), "utf-8").trim();
+    expect(consumerFor).toBe("svc-cloudflared");
+    const producerFor = fs.readFileSync(path.join(s6Root, "svc-cloudflared/producer-for"), "utf-8").trim();
+    expect(producerFor).toBe("svc-cloudflared-log");
   });
 
   it("svc-cloudflared-log is registered in user bundle", () => {

@@ -42,6 +42,7 @@ docker-compose*.yml
 config/
 
 # Test files (not needed in production)
+tests/
 **/*.test.ts
 **/*.spec.ts
 **/__tests__/

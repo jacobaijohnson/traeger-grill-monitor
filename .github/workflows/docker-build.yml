@@ -11,13 +11,15 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
-    name: Build & Push Docker Image
+  # ─── Job 1: Build & Push with SHA/version tags (NOT :latest) ───
+  build:
+    name: Build & Push Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
+    outputs:
+      image-tag: ${{ steps.sha-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
 
@@ -34,19 +36,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute SHA tag
+        id: sha-tag
+        run: echo "tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # latest from main branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # version tag (v0.1.0)
+            # version tag (v0.1.0) — only on tag push
             type=semver,pattern={{version}}
-            # minor version (v0.1)
+            # minor version (v0.1) — only on tag push
             type=semver,pattern={{major}}.{{minor}}
-            # commit SHA
+            # commit SHA — always
             type=sha,prefix=sha-
 
       - name: Build and push
@@ -62,3 +66,100 @@ jobs:
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VERSION=${{ github.ref_name }}
+
+  # ─── Job 2: Smoke Test — validate the built image ─────────
+  smoke-test:
+    name: Smoke Test
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: traeger_dashboard
+          MYSQL_USER: traeger
+          MYSQL_PASSWORD: traeger_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull the just-built image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}
+
+      - name: Start Traeger container
+        run: |
+          docker run -d \
+            --name traeger-smoke \
+            --network host \
+            -e NODE_ENV=production \
+            -e PORT=8420 \
+            -e "DATABASE_URL=mysql://traeger:traeger_pass@127.0.0.1:3306/traeger_dashboard" \
+            -e "JWT_SECRET=ci-smoke-test-secret-not-for-production" \
+            -e "BETTER_AUTH_URL=http://localhost:8420" \
+            -e "ADMIN_EMAIL=smoke@test.dev" \
+            -e "ADMIN_PASSWORD=SmokeTest123!" \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}
+
+      - name: Run smoke test
+        run: |
+          chmod +x tests/smoke-test.sh
+          bash tests/smoke-test.sh http://localhost:8420
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          echo "═══ Container logs ═══"
+          docker logs traeger-smoke 2>&1 | tail -200
+          echo ""
+          echo "═══ Container status ═══"
+          docker inspect traeger-smoke --format='{{.State.Status}} (exit={{.State.ExitCode}})'
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f traeger-smoke 2>/dev/null || true
+
+  # ─── Job 3: Tag :latest — only after smoke test passes ─────
+  tag-latest:
+    name: Tag Latest
+    needs: [build, smoke-test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Promote image to :latest
+        run: |
+          crane copy \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          echo "✅ Tagged ${{ needs.build.outputs.image-tag }} as :latest"

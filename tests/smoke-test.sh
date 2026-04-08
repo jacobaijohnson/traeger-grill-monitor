@@ -265,6 +265,16 @@ LOGIN_STATUS=$(curl -s -o "$BODY_FILE" -D "$HEADER_FILE" -w "%{http_code}" --max
   -d '{"email":"smoke@test.dev","password":"SmokeTest123!"}' \
   "${BASE_URL}/api/auth/sign-in/email" 2>/dev/null || echo "000")
 
+# Debug: show Set-Cookie headers and cookie jar contents
+echo "  [debug] Sign-in status: $LOGIN_STATUS"
+echo "  [debug] Set-Cookie headers:"
+grep -i 'set-cookie' "$HEADER_FILE" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+echo "  [debug] Cookie jar contents:"
+grep -v '^#' "$COOKIE_JAR" 2>/dev/null | sed 's/^/    /' || echo "    (empty)"
+echo "  [debug] Response body (first 200 chars):"
+head -c 200 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
+echo ""
+
 if [ "$LOGIN_STATUS" = "200" ] && body_contains '"user"'; then
   pass "Better Auth sign-in → 200, got user object"
   AUTH_OK=true
@@ -276,6 +286,10 @@ fi
 # Verify session is valid via auth.me
 if [ "$AUTH_OK" = true ]; then
   STATUS=$(http_get_auth "${TRPC}/auth.me")
+  echo "  [debug] auth.me status: $STATUS"
+  echo "  [debug] auth.me body (first 200 chars):"
+  head -c 200 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
+  echo ""
   if [ "$STATUS" = "200" ] && body_contains '"user"'; then
     pass "auth.me (authenticated) → 200, session valid"
   else

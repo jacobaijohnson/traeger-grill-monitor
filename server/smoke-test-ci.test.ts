@@ -478,6 +478,78 @@ describe("CI-2: Smoke Test Script — SSE Authenticated (Section 11)", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: MQTT Broker Probe (Section 12)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — MQTT Broker Probe (Section 12)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("calls traeger.connect with known-bad credentials", () => {
+    expect(script).toContain("traeger.connect");
+    expect(script).toContain("smoke-test@invalid.dev");
+    expect(script).toContain("bad-password-123");
+  });
+
+  it("expects UNAUTHORIZED response from bad credentials", () => {
+    expect(script).toMatch(/traeger\.connect[\s\S]*?UNAUTHORIZED[\s\S]*?auth chain works/);
+  });
+
+  it("detects INTERNAL_SERVER_ERROR as a failure (unhandled crash)", () => {
+    expect(script).toContain("INTERNAL_SERVER_ERROR");
+    expect(script).toContain("auth error not handled gracefully");
+  });
+
+  it("verifies error message is user-friendly", () => {
+    expect(script).toContain("error message is user-friendly");
+    // Should check for helpful keywords in the error
+    expect(script).toMatch(/body_contains.*failed/);
+  });
+
+  it("uses POST method for mutation endpoint", () => {
+    expect(script).toContain("-X POST");
+    expect(script).toContain("Content-Type: application/json");
+  });
+
+  it("sends tRPC-formatted JSON body", () => {
+    // tRPC mutations expect {"json": {...}} format
+    expect(script).toContain('{"json":{"email":"smoke-test@invalid.dev","password":"bad-password-123"}}');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: MQTT State Consistency (Section 13)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — MQTT State Consistency (Section 13)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("re-checks traeger.status after failed connect attempt", () => {
+    // Section 13 should check traeger.status AFTER the failed connect in Section 12
+    // The script should have two separate traeger.status checks
+    const statusChecks = script.match(/traeger\.status/g) || [];
+    expect(statusChecks.length).toBeGreaterThanOrEqual(3); // Section 3 (unauth), Section 8, Section 13
+  });
+
+  it("verifies connected:false is preserved after failed connect", () => {
+    expect(script).toContain("state not corrupted");
+  });
+
+  it("re-checks liveCook.active after failed connect", () => {
+    expect(script).toContain("no MQTT session after failed connect");
+  });
+
+  it("detects if bad credentials somehow resulted in connected:true", () => {
+    expect(script).toContain("shows connected after bad-credential connect attempt");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
 // CI-2: Smoke Test Script — Section Count
 // ═══════════════════════════════════════════════════════════
 
@@ -487,10 +559,10 @@ describe("CI-2: Smoke Test Script — Coverage Completeness", () => {
     "utf-8"
   );
 
-  it("has 11 test sections", () => {
-    // Count section headers (numbered 1-11)
+  it("has 13 test sections", () => {
+    // Count section headers (numbered 1-13)
     const sectionHeaders = script.match(/─── \d+\./g) || [];
-    expect(sectionHeaders.length).toBe(11);
+    expect(sectionHeaders.length).toBe(13);
   });
 
   it("includes both unauthenticated and authenticated test paths", () => {

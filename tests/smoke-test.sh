@@ -484,6 +484,81 @@ fi
 echo ""
 
 # ═════════════════════════════════════════════════════════
+# 12. MQTT Broker Probe (Traeger connect with bad credentials)
+# ═════════════════════════════════════════════════════════
+
+echo "─── 12. MQTT Broker Probe (bad credentials) ───"
+
+if [ "$AUTH_OK" = true ]; then
+  # Call traeger.connect with known-bad credentials.
+  # This exercises the full auth chain:
+  #   traeger.connect → traegerLogin → traegerProxyLogin (fail) → cognitoDirectLogin (fail) → error
+  # Expected: tRPC error with code UNAUTHORIZED and a structured error message
+  MQTT_BODY=$(curl -s -o "$BODY_FILE" -D "$HEADER_FILE" -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -b "$COOKIE_JAR" \
+    "${TRPC}/traeger.connect" \
+    -d '{"json":{"email":"smoke-test@invalid.dev","password":"bad-password-123"}}' 2>/dev/null)
+
+  if body_contains "UNAUTHORIZED"; then
+    pass "traeger.connect (bad creds) → UNAUTHORIZED (auth chain works end-to-end)"
+  elif body_contains "INTERNAL_SERVER_ERROR"; then
+    fail "traeger.connect (bad creds)" "HTTP 500 — auth error not handled gracefully"
+  elif [ "$MQTT_BODY" = "401" ]; then
+    fail "traeger.connect (bad creds)" "HTTP 401 (session expired, not Traeger auth error)"
+  else
+    # Accept any non-500 response — the auth chain ran without crashing
+    warn "traeger.connect (bad creds)" "HTTP ${MQTT_BODY} — expected UNAUTHORIZED in body"
+  fi
+
+  # Verify the error message includes helpful text
+  if body_contains "failed" || body_contains "Authentication" || body_contains "verify"; then
+    pass "traeger.connect error message is user-friendly"
+  else
+    warn "traeger.connect error message" "missing helpful error text"
+  fi
+else
+  warn "MQTT broker probe" "skipped (login failed)"
+fi
+
+echo ""
+
+# ═════════════════════════════════════════════════════════
+# 13. MQTT State Consistency (verify failed connect didn't corrupt state)
+# ═════════════════════════════════════════════════════════
+
+echo "─── 13. MQTT State Consistency ───"
+
+if [ "$AUTH_OK" = true ]; then
+  # After the failed traeger.connect, traeger.status should still show disconnected
+  STATUS=$(http_get_auth "${TRPC}/traeger.status")
+  if body_contains '"connected":false' || body_contains '"connected": false'; then
+    pass "traeger.status still disconnected after failed connect (state not corrupted)"
+  elif [ "$STATUS" = "200" ]; then
+    # If connected:true, the bad creds somehow succeeded (impossible but check)
+    fail "traeger.status" "shows connected after bad-credential connect attempt"
+  else
+    fail "traeger.status (post-connect)" "HTTP $STATUS (expected 200)"
+  fi
+
+  # liveCook.active should still return PRECONDITION_FAILED (no MQTT session)
+  STATUS=$(http_get_auth "${TRPC}/liveCook.active")
+  if body_contains "PRECONDITION_FAILED"; then
+    pass "liveCook.active still PRECONDITION_FAILED (no MQTT session after failed connect)"
+  elif [ "$STATUS" = "200" ]; then
+    # 200 with null data is also acceptable
+    pass "liveCook.active → 200 (no active cook, state consistent)"
+  else
+    warn "liveCook.active (post-connect)" "HTTP $STATUS (unexpected)"
+  fi
+else
+  warn "MQTT state consistency tests" "skipped (login failed)"
+fi
+
+echo ""
+
+# ═════════════════════════════════════════════════════════
 # Summary
 # ═════════════════════════════════════════════════════════
 

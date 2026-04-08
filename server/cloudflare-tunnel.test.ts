@@ -22,10 +22,11 @@ describe("Cloudflare Tunnel: Dockerfile", () => {
     expect(dockerfile).toContain("chmod +x /usr/local/bin/cloudflared");
   });
 
-  it("downloads cloudflared from official GitHub releases", () => {
-    expect(dockerfile).toContain(
-      "github.com/cloudflare/cloudflared/releases/latest/download"
-    );
+  it("downloads pinned cloudflared version from official GitHub releases", () => {
+    expect(dockerfile).toContain("github.com/cloudflare/cloudflared/releases/download");
+    // Should use a pinned version ARG, not /latest/
+    expect(dockerfile).toContain("CLOUDFLARED_VERSION");
+    expect(dockerfile).not.toContain("releases/latest/download");
   });
 
   it("supports multi-architecture builds (amd64, arm64)", () => {

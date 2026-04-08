@@ -103,8 +103,10 @@ describe("Dockerfile", () => {
     expect(dockerfile).toContain("COPY root/ /");
   });
 
-  it("prunes devDependencies", () => {
-    expect(dockerfile).toContain("pnpm prune --prod");
+  it("uses build:docker for fully bundled build (no runtime node_modules)", () => {
+    expect(dockerfile).toContain("build:docker");
+    // Should NOT copy node_modules to production
+    expect(dockerfile).not.toContain("COPY --from=builder /app/node_modules");
   });
 });
 
@@ -171,9 +173,12 @@ describe("s6-overlay service configuration", () => {
     expect(fs.readFileSync(typePath, "utf-8").trim()).toBe("longrun");
   });
 
-  it("svc-traeger has notification-fd set to 3", () => {
+  it("svc-traeger does NOT use s6-notifyoncheck (HEALTHCHECK handles readiness)", () => {
+    const runScript = fs.readFileSync(path.join(s6Root, "svc-traeger/run"), "utf-8");
+    expect(runScript).not.toContain("s6-notifyoncheck");
+    // notification-fd file should not exist
     const fdPath = path.join(s6Root, "svc-traeger/notification-fd");
-    expect(fs.readFileSync(fdPath, "utf-8").trim()).toBe("3");
+    expect(fs.existsSync(fdPath)).toBe(false);
   });
 
   it("svc-traeger run script uses PORT 8420 default", () => {
@@ -269,6 +274,65 @@ describe("ENV_TEMPLATE.md", () => {
   });
 });
 
+// ─── s6-log Rotation Tests ───────────────────────────────
+
+describe("s6-log rotation services", () => {
+  const s6Root = path.join(projectRoot, "root/etc/s6-overlay/s6-rc.d");
+
+  it("svc-traeger-log exists and is a longrun service", () => {
+    const typePath = path.join(s6Root, "svc-traeger-log/type");
+    expect(fs.readFileSync(typePath, "utf-8").trim()).toBe("longrun");
+  });
+
+  it("svc-traeger-log run script uses s6-log with size rotation", () => {
+    const runScript = fs.readFileSync(path.join(s6Root, "svc-traeger-log/run"), "utf-8");
+    expect(runScript).toContain("s6-log");
+    expect(runScript).toContain("/config/logs/traeger");
+    // Size-based rotation (s = size in bytes)
+    expect(runScript).toMatch(/s\d+/);
+    // File count limit (n = number of files)
+    expect(runScript).toMatch(/n\d+/);
+  });
+
+  it("svc-traeger-log is wired as consumer of svc-traeger", () => {
+    expect(fs.existsSync(path.join(s6Root, "svc-traeger-log/consumer-for/svc-traeger"))).toBe(true);
+    expect(fs.existsSync(path.join(s6Root, "svc-traeger/producer-for/svc-traeger-log"))).toBe(true);
+  });
+
+  it("svc-traeger-log has pipeline-name", () => {
+    const pipelineDir = path.join(s6Root, "svc-traeger-log/pipeline-name");
+    expect(fs.existsSync(pipelineDir)).toBe(true);
+    const files = fs.readdirSync(pipelineDir);
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it("svc-traeger-log is registered in user bundle", () => {
+    expect(fs.existsSync(path.join(s6Root, "user/contents.d/svc-traeger-log"))).toBe(true);
+  });
+
+  it("svc-cloudflared-log exists and is a longrun service", () => {
+    const typePath = path.join(s6Root, "svc-cloudflared-log/type");
+    expect(fs.readFileSync(typePath, "utf-8").trim()).toBe("longrun");
+  });
+
+  it("svc-cloudflared-log run script uses s6-log with size rotation", () => {
+    const runScript = fs.readFileSync(path.join(s6Root, "svc-cloudflared-log/run"), "utf-8");
+    expect(runScript).toContain("s6-log");
+    expect(runScript).toContain("/config/logs/cloudflared");
+    expect(runScript).toMatch(/s\d+/);
+    expect(runScript).toMatch(/n\d+/);
+  });
+
+  it("svc-cloudflared-log is wired as consumer of svc-cloudflared", () => {
+    expect(fs.existsSync(path.join(s6Root, "svc-cloudflared-log/consumer-for/svc-cloudflared"))).toBe(true);
+    expect(fs.existsSync(path.join(s6Root, "svc-cloudflared/producer-for/svc-cloudflared-log"))).toBe(true);
+  });
+
+  it("svc-cloudflared-log is registered in user bundle", () => {
+    expect(fs.existsSync(path.join(s6Root, "user/contents.d/svc-cloudflared-log"))).toBe(true);
+  });
+});
+
 // ─── .dockerignore Tests ─────────────────────────────────
 
 describe(".dockerignore", () => {
@@ -293,5 +357,17 @@ describe(".dockerignore", () => {
   it("excludes Docker files to prevent recursive builds", () => {
     expect(dockerignore).toContain("Dockerfile");
     expect(dockerignore).toContain("docker-compose");
+  });
+
+  it("excludes test files", () => {
+    expect(dockerignore).toContain("*.test.ts");
+  });
+
+  it("excludes CI/CD files", () => {
+    expect(dockerignore).toContain(".github/");
+  });
+
+  it("excludes environment files", () => {
+    expect(dockerignore).toContain(".env");
   });
 });

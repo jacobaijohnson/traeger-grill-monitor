@@ -11,8 +11,7 @@ echo "Starting Traeger Grill Monitor on port ${PORT:-8420}..."
 cd /app
 
 # s6-setuidgid drops to the abc user (respects PUID/PGID)
-# s6-notifyoncheck provides readiness notification via /api/health
+# HEALTHCHECK in Dockerfile handles readiness for orchestrators
 exec \
-    s6-notifyoncheck -d -n 300 -w 1000 -c "wget -qO- http://localhost:${PORT:-8420}/api/health >/dev/null 2>&1" \
-        s6-setuidgid abc \
-            node dist/index.js
+    s6-setuidgid abc \
+        node dist/index.js

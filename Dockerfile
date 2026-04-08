@@ -24,11 +24,9 @@ COPY shared/ shared/
 COPY drizzle/ drizzle/
 COPY vite.config.ts tsconfig.json ./
 
-# Build client (Vite) and server (esbuild)
-RUN pnpm run build
-
-# Prune devDependencies for smaller production image
-RUN pnpm prune --prod
+# Build client (Vite) and server (esbuild) — fully bundled, no runtime node_modules needed
+# build:docker removes --packages=external so all deps are inlined into dist/index.js
+RUN pnpm run build:docker
 
 # ─── Stage 2: Production (LSIO base) ─────────────────────
 FROM ghcr.io/linuxserver/baseimage-alpine:3.23
@@ -39,9 +37,12 @@ ARG VERSION
 LABEL build_version="traeger-grill-monitor version:- ${VERSION} Build-date:- ${BUILD_DATE}"
 LABEL maintainer="jacobaijohnson"
 LABEL org.opencontainers.image.title="Traeger Grill Monitor"
-LABEL org.opencontainers.image.description="Real-time Traeger grill monitoring dashboard with cook tracking, pellet consumption, and multi-grill support"
+LABEL org.opencontainers.image.description="Self-hosted real-time monitoring dashboard for Traeger WiFIRE grills. Live telemetry, cook automation, pellet analytics, push notifications, and persistent alarms. Single Docker container."
 LABEL org.opencontainers.image.source="https://github.com/jacobaijohnson/traeger-grill-monitor"
 LABEL org.opencontainers.image.licenses="MIT"
+
+# Pin cloudflared version for reproducible builds
+ARG CLOUDFLARED_VERSION=2026.3.0
 
 # Environment defaults
 ENV \
@@ -49,15 +50,16 @@ ENV \
   HOME=/app \
   PORT=8420 \
   TUNNEL_TOKEN="" \
-  TUNNEL_METRICS=""
+  TUNNEL_METRICS="" \
+  # Heap limit prevents runaway memory on constrained devices (RPi, NAS)
+  NODE_OPTIONS="--max-old-space-size=256"
 
 # Install Node.js runtime and cloudflared (Cloudflare Tunnel client)
 RUN \
   echo "**** install runtime packages ****" && \
   apk add --no-cache \
-    nodejs \
-    npm && \
-  echo "**** install cloudflared ****" && \
+    nodejs && \
+  echo "**** install cloudflared ${CLOUDFLARED_VERSION} ****" && \
   ARCH=$(uname -m) && \
   case "${ARCH}" in \
     x86_64)  CF_ARCH="amd64" ;; \
@@ -66,34 +68,38 @@ RUN \
     *)       echo "Unsupported arch: ${ARCH}"; exit 1 ;; \
   esac && \
   wget -q -O /usr/local/bin/cloudflared \
-    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" && \
+    "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${CF_ARCH}" && \
   chmod +x /usr/local/bin/cloudflared && \
   echo "**** create app directory ****" && \
   mkdir -p /app && \
+  echo "**** create log directories ****" && \
+  mkdir -p /config/logs/traeger /config/logs/cloudflared && \
   echo "**** cleanup ****" && \
   rm -rf /tmp/*
 
 # Copy built artifacts from builder stage
-# dist/index.js = bundled server, dist/public/ = Vite-built client
+# dist/index.js = fully bundled server (all deps inlined by esbuild)
+# dist/public/   = Vite-built client assets
 COPY --from=builder /app/dist /app/dist
-
-# Copy production node_modules from builder (pruned)
-COPY --from=builder /app/node_modules /app/node_modules
-
-# Copy package.json for runtime reference
-COPY --from=builder /app/package.json /app/package.json
 
 # Copy drizzle migrations (needed for DB schema setup)
 COPY --from=builder /app/drizzle /app/drizzle
 
-# Copy shared types
+# Copy shared types (referenced by migrate.js at runtime)
 COPY --from=builder /app/shared /app/shared
 
-# Add s6-overlay service definitions and init scripts
+# Copy package.json for runtime reference (version info, etc.)
+COPY --from=builder /app/package.json /app/package.json
+
+# NOTE: node_modules is NOT copied — all deps are bundled into dist/index.js
+# This reduces the image by ~285 MB compared to the previous approach.
+
+# Add s6-overlay service definitions, init scripts, and log rotation
 COPY root/ /
 
 # DPL-1: Health check for Docker orchestrators (Compose, Swarm, K8s)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+# start-period=30s accommodates slower MySQL starts on low-powered hardware (RPi, NAS)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://localhost:${PORT}/api/health || exit 1
 
 # Ports and volumes (LSIO convention: /config for persistent data)

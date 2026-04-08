@@ -26,6 +26,7 @@ design-notes.md
 .idea/
 *.swp
 *.swo
+*~
 
 # OS files
 .DS_Store
@@ -39,3 +40,27 @@ docker-compose*.yml
 
 # Config directory (runtime volume)
 config/
+
+# Test files (not needed in production)
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/
+vitest.config.*
+coverage/
+.nyc_output/
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Environment files (secrets injected at runtime)
+.env
+.env.*
+
+# Misc development artifacts
+*.log
+*.tgz
+*.tar.gz
+npm-debug.log*
+pnpm-debug.log*

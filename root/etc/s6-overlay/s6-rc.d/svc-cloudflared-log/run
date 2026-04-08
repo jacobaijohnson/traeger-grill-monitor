@@ -1,0 +1,14 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# ─── Log service for svc-cloudflared ─────────────────────
+# s6-log captures stdout/stderr from cloudflared and writes
+# timestamped, size-rotated log files to /config/logs/cloudflared/.
+#
+# Rotation policy:
+#   s1000000 = rotate at 1 MB per file
+#   n5       = keep 5 rotated files (5 MB max total)
+#   T        = prepend ISO 8601 timestamps to each line
+# ──────────────────────────────────────────────────────────
+
+mkdir -p /config/logs/cloudflared
+exec s6-setuidgid abc s6-log -b T s1000000 n5 /config/logs/cloudflared

@@ -1,0 +1,16 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# ─── Log service for svc-traeger ─────────────────────────
+# s6-log captures stdout/stderr from the producer service and
+# writes timestamped, size-rotated log files to /config/logs/traeger/.
+#
+# Rotation policy:
+#   s1000000 = rotate at 1 MB per file
+#   n10      = keep 10 rotated files (10 MB max total)
+#   T        = prepend ISO 8601 timestamps to each line
+#
+# Logs persist across container restarts via the /config volume.
+# ──────────────────────────────────────────────────────────
+
+mkdir -p /config/logs/traeger
+exec s6-setuidgid abc s6-log -b T s1000000 n10 /config/logs/traeger

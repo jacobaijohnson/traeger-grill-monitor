@@ -198,21 +198,38 @@ describe("DPL-1: Docker HEALTHCHECK", () => {
   it("has reasonable timing parameters", () => {
     expect(dockerfile).toContain("--interval=30s");
     expect(dockerfile).toContain("--timeout=5s");
-    expect(dockerfile).toContain("--start-period=15s");
+    expect(dockerfile).toContain("--start-period=30s");
     expect(dockerfile).toContain("--retries=3");
   });
-});
 
-describe("s6 readiness uses /api/health", () => {
-  const runScript = fs.readFileSync(
-    path.join(projectRoot, "root/etc/s6-overlay/s6-rc.d/svc-traeger/run"),
-    "utf-8"
-  );
+  it("uses pinned cloudflared version (not latest)", () => {
+    expect(dockerfile).toContain("CLOUDFLARED_VERSION=");
+    expect(dockerfile).not.toContain("releases/latest/download");
+  });
 
-  it("uses HTTP health check instead of TCP port check", () => {
-    expect(runScript).toContain("/api/health");
-    // Should NOT use bare nc -z anymore
-    expect(runScript).not.toContain("nc -z");
+  it("sets NODE_OPTIONS with max-old-space-size", () => {
+    expect(dockerfile).toContain("--max-old-space-size=");
+  });
+
+  it("does NOT copy node_modules to production image", () => {
+    // esbuild bundles all deps into dist/index.js, no runtime node_modules needed
+    expect(dockerfile).not.toContain("COPY --from=builder /app/node_modules");
+  });
+
+  it("uses build:docker script for fully bundled build", () => {
+    expect(dockerfile).toContain("build:docker");
+  });
+
+  it("creates log directories", () => {
+    expect(dockerfile).toContain("/config/logs/traeger");
+    expect(dockerfile).toContain("/config/logs/cloudflared");
+  });
+
+  it("removes npm from production image (not needed)", () => {
+    // Only nodejs is needed, npm adds unnecessary size
+    const apkLine = dockerfile.split("\n").find(l => l.includes("apk add"));
+    expect(apkLine).toBeTruthy();
+    expect(apkLine).not.toContain("npm");
   });
 });
 

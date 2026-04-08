@@ -20,6 +20,9 @@ lsiown -R abc:abc /app
 if [ -n "${DATABASE_URL}" ]; then
     echo "─── Traeger Grill Monitor: Running database migrations ───"
 
+    # Change to /app BEFORE the MySQL check so node can find mysql2 in node_modules
+    cd /app
+
     # Wait for MySQL to be ready (up to 60 seconds)
     RETRIES=0
     MAX_RETRIES=30
@@ -44,7 +47,6 @@ if [ -n "${DATABASE_URL}" ]; then
             export BETTER_AUTH_SECRET="${JWT_SECRET}"
         fi
 
-        cd /app
         node dist/migrate.js
         MIGRATE_EXIT=$?
         if [ "${MIGRATE_EXIT}" -ne 0 ]; then

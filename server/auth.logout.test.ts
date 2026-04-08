@@ -213,6 +213,22 @@ describe("s6-overlay service configuration", () => {
     const depPath = path.join(s6Root, "init-config-end/dependencies.d/init-traeger-config");
     expect(fs.existsSync(depPath)).toBe(true);
   });
+
+  it("init-traeger-config changes to /app before MySQL readiness check", () => {
+    const runScript = fs.readFileSync(path.join(s6Root, "init-traeger-config/run"), "utf-8");
+    const cdAppIndex = runScript.indexOf("cd /app");
+    const mysqlCheckIndex = runScript.indexOf("mysql2/promise");
+    // cd /app must appear before the MySQL readiness check
+    expect(cdAppIndex).toBeGreaterThan(-1);
+    expect(mysqlCheckIndex).toBeGreaterThan(-1);
+    expect(cdAppIndex).toBeLessThan(mysqlCheckIndex);
+  });
+
+  it("init-traeger-config maps JWT_SECRET to BETTER_AUTH_SECRET", () => {
+    const runScript = fs.readFileSync(path.join(s6Root, "init-traeger-config/run"), "utf-8");
+    expect(runScript).toContain("BETTER_AUTH_SECRET");
+    expect(runScript).toContain("JWT_SECRET");
+  });
 });
 
 // ─── ENV_TEMPLATE Tests ──────────────────────────────────

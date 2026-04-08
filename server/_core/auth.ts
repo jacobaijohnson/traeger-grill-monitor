@@ -82,6 +82,11 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // update session age every 24 hours
   },
   trustedOrigins: buildTrustedOrigins(),
+  advanced: {
+    // Only use __Secure- cookie prefix when serving over HTTPS.
+    // CI smoke tests run over plain HTTP, so Secure cookies won't be sent back.
+    useSecureCookies: (process.env.BETTER_AUTH_URL || "").startsWith("https://"),
+  },
   plugins: [
     admin(),
   ],

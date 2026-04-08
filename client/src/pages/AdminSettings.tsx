@@ -53,6 +53,9 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
+  Eye,
+  EyeOff,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -712,6 +715,200 @@ function AllowlistTab() {
   );
 }
 
+// ─── Password Management Tab ─────────────────────────
+
+function PasswordTab() {
+  const { user: currentUser } = useAuth();
+  const utils = trpc.useUtils();
+  const { data: users } = trpc.admin.listUsers.useQuery();
+
+  // Self password change
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+
+  const changePw = trpc.password.changeOwn.useMutation({
+    onSuccess: () => {
+      toast.success("Password changed successfully");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+    },
+    onError: (e) => toast.error(e.message || "Failed to change password"),
+  });
+
+  // Admin reset user password
+  const [resetUserId, setResetUserId] = useState("");
+  const [resetPw, setResetPw] = useState("");
+  const [showResetPw, setShowResetPw] = useState(false);
+
+  const resetUserPw = trpc.password.resetUser.useMutation({
+    onSuccess: () => {
+      toast.success("User password has been reset");
+      setResetUserId(""); setResetPw("");
+    },
+    onError: (e) => toast.error(e.message || "Failed to reset password"),
+  });
+
+  const pwMatch = newPw === confirmPw;
+  const pwLong = newPw.length >= 8;
+  const canChangePw = currentPw && pwLong && pwMatch && !changePw.isPending;
+  const canResetPw = resetUserId && resetPw.length >= 8 && !resetUserPw.isPending;
+
+  const otherUsers = ((users as any[]) || []).filter((u: any) => u.id !== currentUser?.id);
+
+  return (
+    <div className="space-y-6">
+      {/* Change Own Password */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-mono uppercase tracking-wider">
+            <Lock className="h-4 w-4 text-primary" />
+            Change Your Password
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Update your own admin password. You'll need your current password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canChangePw) changePw.mutate({ currentPassword: currentPw, newPassword: newPw });
+            }}
+            className="space-y-4 max-w-md"
+          >
+            <div className="space-y-2">
+              <Label className="text-xs font-mono text-muted-foreground">Current Password</Label>
+              <Input
+                type={showPw ? "text" : "password"}
+                value={currentPw}
+                onChange={(e) => setCurrentPw(e.target.value)}
+                className="bg-secondary font-mono"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-mono text-muted-foreground">New Password</Label>
+              <div className="relative">
+                <Input
+                  type={showPw ? "text" : "password"}
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  className="bg-secondary font-mono pr-10"
+                  autoComplete="new-password"
+                  minLength={8}
+                  placeholder="Minimum 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {newPw && !pwLong && (
+                <p className="text-xs text-destructive">Password must be at least 8 characters</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-mono text-muted-foreground">Confirm New Password</Label>
+              <Input
+                type={showPw ? "text" : "password"}
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                className="bg-secondary font-mono"
+                autoComplete="new-password"
+              />
+              {confirmPw && !pwMatch && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+            </div>
+            <Button type="submit" disabled={!canChangePw} className="font-mono">
+              {changePw.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Changing...</>
+              ) : (
+                "Change Password"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Reset User Password (admin) */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-mono uppercase tracking-wider">
+            <Key className="h-4 w-4 text-amber-400" />
+            Reset User Password
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Set a new password for any user without needing their current password.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canResetPw) resetUserPw.mutate({ userId: resetUserId, newPassword: resetPw });
+            }}
+            className="space-y-4 max-w-md"
+          >
+            <div className="space-y-2">
+              <Label className="text-xs font-mono text-muted-foreground">Select User</Label>
+              <Select value={resetUserId} onValueChange={setResetUserId}>
+                <SelectTrigger className="bg-secondary font-mono">
+                  <SelectValue placeholder="Choose a user..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {otherUsers.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      <span className="font-mono text-sm">{u.name || u.email}</span>
+                      <span className="text-xs text-muted-foreground ml-2">({u.email})</span>
+                    </SelectItem>
+                  ))}
+                  {otherUsers.length === 0 && (
+                    <SelectItem value="__none" disabled>No other users</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-mono text-muted-foreground">New Password</Label>
+              <div className="relative">
+                <Input
+                  type={showResetPw ? "text" : "password"}
+                  value={resetPw}
+                  onChange={(e) => setResetPw(e.target.value)}
+                  className="bg-secondary font-mono pr-10"
+                  placeholder="Minimum 8 characters"
+                  minLength={8}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPw(!showResetPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  tabIndex={-1}
+                >
+                  {showResetPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <Button type="submit" disabled={!canResetPw} variant="outline" className="font-mono border-amber-500/30 text-amber-400">
+              {resetUserPw.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Resetting...</>
+              ) : (
+                "Reset Password"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main Admin Settings Page ─────────────────────────
 
 export default function AdminSettings() {
@@ -745,6 +942,9 @@ export default function AdminSettings() {
           <TabsTrigger value="allowlist" className="font-mono text-xs">
             <Shield className="h-3.5 w-3.5 mr-1.5" />Allowlist
           </TabsTrigger>
+          <TabsTrigger value="passwords" className="font-mono text-xs">
+            <Lock className="h-3.5 w-3.5 mr-1.5" />Passwords
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4">
@@ -758,6 +958,9 @@ export default function AdminSettings() {
         </TabsContent>
         <TabsContent value="allowlist" className="mt-4">
           <AllowlistTab />
+        </TabsContent>
+        <TabsContent value="passwords" className="mt-4">
+          <PasswordTab />
         </TabsContent>
       </Tabs>
     </div>

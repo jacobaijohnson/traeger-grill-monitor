@@ -10,7 +10,8 @@ export async function seedAdmin(): Promise<void> {
   const adminPassword = process.env.ADMIN_PASSWORD;
 
   if (!adminEmail || !adminPassword) {
-    console.log("[Seed] ADMIN_EMAIL or ADMIN_PASSWORD not set, skipping admin seed.");
+    console.log("[Seed] ADMIN_EMAIL or ADMIN_PASSWORD not set, skipping env-var seed.");
+    console.log("[Seed] Admin can be created via the first-boot setup wizard at /setup");
     return;
   }
 

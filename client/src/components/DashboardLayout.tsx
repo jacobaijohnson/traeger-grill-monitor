@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -72,10 +73,24 @@ export default function DashboardLayout({
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { loading, user } = useAuth();
+  const [, navigate] = useLocation();
+
+  // Check if first-boot setup is needed
+  const { data: setupStatus } = trpc.setup.status.useQuery(undefined, {
+    enabled: !loading && !user,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  // Redirect to setup wizard if no admin exists
+  useEffect(() => {
+    if (setupStatus?.needsSetup) {
+      navigate("/setup");
+    }
+  }, [setupStatus, navigate]);
 
   if (loading) {
     return <DashboardLayoutSkeleton />;

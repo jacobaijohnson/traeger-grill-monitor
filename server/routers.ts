@@ -29,6 +29,8 @@ import {
   analyticsRouter,
   executionsRouter,
   adminRouter,
+  setupRouter,
+  passwordRouter,
   pushRouter,
 } from "./routers/index";
 
@@ -62,6 +64,8 @@ export const appRouter = router({
   analytics: analyticsRouter,
   executions: executionsRouter,
   admin: adminRouter,
+  setup: setupRouter,
+  password: passwordRouter,
   push: pushRouter,
 });
 

@@ -23,6 +23,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Setup = lazy(() => import("./pages/Setup"));
 
 /** Minimal loading fallback — keeps layout stable during chunk load */
 function PageLoader() {
@@ -38,6 +39,7 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <Switch>
         {/* Public auth routes — outside DashboardLayout */}
+        <Route path={"/setup"} component={Setup} />
         <Route path={"/login"} component={Login} />
         <Route path={"/register"} component={Register} />
         <Route path={"/forgot-password"} component={ForgotPassword} />

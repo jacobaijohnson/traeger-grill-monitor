@@ -11,4 +11,5 @@
 # ──────────────────────────────────────────────────────────
 
 mkdir -p /config/logs/cloudflared
+chown abc:abc /config/logs/cloudflared
 exec s6-setuidgid abc s6-log -b T s1000000 n5 /config/logs/cloudflared

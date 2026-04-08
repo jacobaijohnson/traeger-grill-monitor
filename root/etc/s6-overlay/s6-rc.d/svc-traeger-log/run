@@ -13,4 +13,5 @@
 # ──────────────────────────────────────────────────────────
 
 mkdir -p /config/logs/traeger
+chown abc:abc /config/logs/traeger
 exec s6-setuidgid abc s6-log -b T s1000000 n10 /config/logs/traeger

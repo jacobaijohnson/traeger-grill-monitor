@@ -219,14 +219,19 @@ describe("s6-overlay service configuration", () => {
     expect(fs.existsSync(depPath)).toBe(true);
   });
 
-  it("init-traeger-config changes to /app before MySQL readiness check", () => {
+  it("init-traeger-config uses TCP socket check for MySQL readiness (no node_modules needed)", () => {
     const runScript = fs.readFileSync(path.join(s6Root, "init-traeger-config/run"), "utf-8");
+    // Uses Node.js built-in net module for TCP check — no mysql2 dependency needed
+    expect(runScript).toContain("net.Socket");
+    expect(runScript).toContain(".connect(");
+    // Must NOT depend on mysql2 (node_modules eliminated in production image)
+    expect(runScript).not.toContain("mysql2/promise");
+    // cd /app must still appear before the check
     const cdAppIndex = runScript.indexOf("cd /app");
-    const mysqlCheckIndex = runScript.indexOf("mysql2/promise");
-    // cd /app must appear before the MySQL readiness check
+    const checkIndex = runScript.indexOf("net.Socket");
     expect(cdAppIndex).toBeGreaterThan(-1);
-    expect(mysqlCheckIndex).toBeGreaterThan(-1);
-    expect(cdAppIndex).toBeLessThan(mysqlCheckIndex);
+    expect(checkIndex).toBeGreaterThan(-1);
+    expect(cdAppIndex).toBeLessThan(checkIndex);
   });
 
   it("init-traeger-config maps JWT_SECRET to BETTER_AUTH_SECRET", () => {

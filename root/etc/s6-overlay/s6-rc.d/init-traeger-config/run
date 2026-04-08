@@ -6,6 +6,9 @@ echo "─── Traeger Grill Monitor: Initializing ───"
 # Ensure /config directory exists and has correct ownership
 mkdir -p /config
 
+# Ensure log directories exist with correct ownership
+mkdir -p /config/logs/traeger /config/logs/cloudflared
+
 # Set ownership of config directory to abc user (PUID/PGID)
 lsiown -R abc:abc /config
 
@@ -20,16 +23,25 @@ lsiown -R abc:abc /app
 if [ -n "${DATABASE_URL}" ]; then
     echo "─── Traeger Grill Monitor: Running database migrations ───"
 
-    # Change to /app BEFORE the MySQL check so node can find mysql2 in node_modules
     cd /app
 
+    # Parse MySQL host and port from DATABASE_URL
+    # Format: mysql://user:pass@host:port/dbname
+    DB_HOST=$(echo "${DATABASE_URL}" | sed -n 's|.*@\([^:/]*\).*|\1|p')
+    DB_PORT=$(echo "${DATABASE_URL}" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+    DB_PORT=${DB_PORT:-3306}
+
     # Wait for MySQL to be ready (up to 60 seconds)
+    # Uses a simple TCP connection check — no node_modules needed
     RETRIES=0
     MAX_RETRIES=30
-    until node --input-type=module -e "
-      import mysql from 'mysql2/promise';
-      const c = await mysql.createConnection(process.env.DATABASE_URL);
-      await c.end();
+    until node -e "
+      const net = require('net');
+      const s = new net.Socket();
+      s.setTimeout(2000);
+      s.connect(${DB_PORT}, '${DB_HOST}', () => { s.destroy(); process.exit(0); });
+      s.on('error', () => process.exit(1));
+      s.on('timeout', () => { s.destroy(); process.exit(1); });
     " 2>/dev/null; do
         RETRIES=$((RETRIES + 1))
         if [ "${RETRIES}" -ge "${MAX_RETRIES}" ]; then

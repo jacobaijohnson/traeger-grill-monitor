@@ -91,6 +91,10 @@ describe("CI-1: Smoke Test Job Configuration", () => {
   // Extract just the smoke-test section
   const smokeSection = workflow.split("smoke-test:")[1]?.split(/\n  \w+-?\w*:/)[0] || "";
 
+  it("has contents: read permission for checkout", () => {
+    expect(smokeSection).toContain("contents: read");
+  });
+
   it("uses MySQL 8.0 service container", () => {
     expect(smokeSection).toContain("mysql:8.0");
   });

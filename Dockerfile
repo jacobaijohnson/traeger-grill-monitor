@@ -86,8 +86,8 @@ COPY --from=builder /app/dist /app/dist
 # Copy drizzle migrations (needed for DB schema setup)
 COPY --from=builder /app/drizzle /app/drizzle
 
-# Copy shared types (referenced by migrate.js at runtime)
-COPY --from=builder /app/shared /app/shared
+# NOTE: shared/ is NOT copied — all types are bundled into dist/ by esbuild.
+# This saves ~160 KB and eliminates a layer.
 
 # Copy package.json for runtime reference (version info, etc.)
 COPY --from=builder /app/package.json /app/package.json

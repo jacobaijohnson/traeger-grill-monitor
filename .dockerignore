@@ -21,6 +21,10 @@ design-notes.md
 !README.md
 !ENV_TEMPLATE.md
 
+# Audit/analysis scripts
+*.sh
+!root/**/*.sh
+
 # IDE / Editor
 .vscode/
 .idea/

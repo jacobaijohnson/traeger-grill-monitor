@@ -22,6 +22,7 @@ COPY client/ client/
 COPY server/ server/
 COPY shared/ shared/
 COPY drizzle/ drizzle/
+COPY scripts/ scripts/
 COPY vite.config.ts tsconfig.json ./
 
 # Build client (Vite) and server (esbuild) — fully bundled, no runtime node_modules needed

@@ -8,15 +8,35 @@ Built for the homelab community. Runs as a single Docker container following [Li
 
 ## Screenshots
 
-<!-- Replace these placeholders with actual screenshots from your running instance -->
+<details>
+<summary><strong>Landing Page</strong> — Dark-themed welcome screen with branding and sign-in CTA</summary>
 
-| Dashboard | Live Cook | Cook History |
-|:---------:|:---------:|:------------:|
-| *Screenshot coming soon* | *Screenshot coming soon* | *Screenshot coming soon* |
+![Landing Page](docs/screenshots/landing.png)
 
-| Cook Programs | Pellet Analytics | Push Notifications |
-|:-------------:|:----------------:|:------------------:|
-| *Screenshot coming soon* | *Screenshot coming soon* | *Screenshot coming soon* |
+</details>
+
+<details>
+<summary><strong>Login</strong> — Email/password sign-in form with links to register and password reset</summary>
+
+![Login Page](docs/screenshots/login.png)
+
+</details>
+
+<details>
+<summary><strong>Register</strong> — Account creation with name, email, password, and confirmation fields</summary>
+
+![Register Page](docs/screenshots/register.png)
+
+</details>
+
+<details>
+<summary><strong>Forgot Password</strong> — Console-only password reset (no SMTP required)</summary>
+
+![Forgot Password](docs/screenshots/forgot-password.png)
+
+</details>
+
+> **Note:** Dashboard, live cook, and analytics screenshots will be added once a Traeger grill is connected to a running instance. The screenshots above show the authentication flow which is the first experience for new users.
 
 ---
 

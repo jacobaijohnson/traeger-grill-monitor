@@ -76,8 +76,15 @@ async function runMigrations() {
     // Split by statement (handling the --> statement-breakpoint markers too)
     const statements = sql
       .split(/;(?:\s*-->.*)?/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith("--"));
+      .map((s) => {
+        // Strip leading comment lines and empty lines from each statement
+        const lines = s.split('\n');
+        while (lines.length && (lines[0].trim() === '' || lines[0].trim().startsWith('--'))) {
+          lines.shift();
+        }
+        return lines.join('\n').trim();
+      })
+      .filter((s) => s.length > 0 && !s.startsWith('--'));
 
     log.info({ count: statements.length }, "Executing SQL statements");
 

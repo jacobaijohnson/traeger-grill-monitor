@@ -133,7 +133,12 @@ async function runMigrations() {
   log.info("All migrations complete");
 }
 
-runMigrations().catch((err) => {
-  log.fatal({ err }, "Fatal migration error");
-  process.exit(1);
-});
+runMigrations()
+  .then(() => {
+    // Explicitly exit — Better Auth may hold open DB connections
+    process.exit(0);
+  })
+  .catch((err) => {
+    log.fatal({ err }, "Fatal migration error");
+    process.exit(1);
+  });

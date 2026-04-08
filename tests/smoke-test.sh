@@ -258,42 +258,40 @@ echo ""
 echo "─── 7. Authenticated Session ───"
 
 # Login via Better Auth email/password sign-in
+# Use -c to write cookies AND -b to read them back (curl needs both for cookie jar)
 LOGIN_STATUS=$(curl -s -o "$BODY_FILE" -D "$HEADER_FILE" -w "%{http_code}" --max-time 10 \
-  -c "$COOKIE_JAR" \
+  -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{"email":"smoke@test.dev","password":"SmokeTest123!"}' \
   "${BASE_URL}/api/auth/sign-in/email" 2>/dev/null || echo "000")
-
-# Debug: show Set-Cookie headers and cookie jar contents
-echo "  [debug] Sign-in status: $LOGIN_STATUS"
-echo "  [debug] Set-Cookie headers:"
-grep -i 'set-cookie' "$HEADER_FILE" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
-echo "  [debug] Cookie jar contents:"
-grep -v '^#' "$COOKIE_JAR" 2>/dev/null | sed 's/^/    /' || echo "    (empty)"
-echo "  [debug] Response body (first 200 chars):"
-head -c 200 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
-echo ""
 
 if [ "$LOGIN_STATUS" = "200" ] && body_contains '"user"'; then
   pass "Better Auth sign-in → 200, got user object"
   AUTH_OK=true
 else
   fail "Better Auth sign-in" "HTTP $LOGIN_STATUS (expected 200 with user)"
+  # Dump debug info on failure
+  echo "  [debug] Set-Cookie headers:"
+  grep -i 'set-cookie' "$HEADER_FILE" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+  echo "  [debug] Response body (first 300 chars):"
+  head -c 300 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
+  echo ""
   AUTH_OK=false
 fi
 
 # Verify session is valid via auth.me
+# Note: tRPC wraps the response as {"result":{"data":{"json":{...}}}}
+# so we check for '"email"' (present in user object) not '"user"' (not a tRPC key)
 if [ "$AUTH_OK" = true ]; then
   STATUS=$(http_get_auth "${TRPC}/auth.me")
-  echo "  [debug] auth.me status: $STATUS"
-  echo "  [debug] auth.me body (first 200 chars):"
-  head -c 200 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
-  echo ""
-  if [ "$STATUS" = "200" ] && body_contains '"user"'; then
+  if [ "$STATUS" = "200" ] && body_contains '"email"'; then
     pass "auth.me (authenticated) → 200, session valid"
   else
-    fail "auth.me (authenticated)" "HTTP $STATUS (expected 200 with user)"
+    fail "auth.me (authenticated)" "HTTP $STATUS (expected 200 with email in body)"
+    echo "  [debug] auth.me body (first 300 chars):"
+    head -c 300 "$BODY_FILE" 2>/dev/null | sed 's/^/    /'
+    echo ""
     AUTH_OK=false
   fi
 fi

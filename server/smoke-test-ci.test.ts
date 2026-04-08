@@ -346,6 +346,12 @@ describe("CI-2: Smoke Test Script — Authentication Flow (Section 7)", () => {
     expect(script).toContain("session valid");
   });
 
+  it("checks for email in auth.me response (tRPC wraps data, no 'user' key)", () => {
+    // tRPC response is {"result":{"data":{"json":{...}}}} — no "user" key
+    // The script should check for '"email"' which IS in the user object
+    expect(script).toMatch(/auth\.me[\s\S]*?body_contains.*email/);
+  });
+
   it("tracks AUTH_OK flag to skip dependent tests on login failure", () => {
     expect(script).toContain("AUTH_OK=true");
     expect(script).toContain("AUTH_OK=false");

@@ -156,10 +156,10 @@ describe("CI-1: Tag Latest Job Configuration", () => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// CI-2: Smoke Test Script
+// CI-2: Smoke Test Script — Structure & Sections
 // ═══════════════════════════════════════════════════════════
 
-describe("CI-2: Smoke Test Script", () => {
+describe("CI-2: Smoke Test Script — Basics", () => {
   const scriptPath = path.join(projectRoot, "tests/smoke-test.sh");
 
   it("exists and is executable", () => {
@@ -188,58 +188,6 @@ describe("CI-2: Smoke Test Script", () => {
     expect(script).toContain("MAX_RETRIES");
   });
 
-  it("tests REST endpoints: /api/health, /api/auth/ok, /api/version", () => {
-    expect(script).toContain("/api/health");
-    expect(script).toContain("/api/auth/ok");
-    expect(script).toContain("/api/version");
-  });
-
-  it("tests public tRPC endpoints", () => {
-    const publicEndpoints = [
-      "setup.status",
-      "auth.me",
-      "meatProfiles.list",
-      "templates.list",
-      "customTemplates.community",
-    ];
-    for (const ep of publicEndpoints) {
-      expect(script).toContain(ep);
-    }
-  });
-
-  it("tests protected tRPC endpoints for UNAUTHORIZED", () => {
-    const protectedEndpoints = [
-      "grill.telemetry",
-      "traeger.status",
-      "liveCook.active",
-      "cookSession.list",
-      "automation.list",
-      "push.getVapidKey",
-    ];
-    for (const ep of protectedEndpoints) {
-      expect(script).toContain(ep);
-    }
-    expect(script).toContain("UNAUTHORIZED");
-  });
-
-  it("tests admin endpoints for auth gate", () => {
-    expect(script).toContain("admin.getRegistrationConfig");
-    expect(script).toContain("admin.listUsers");
-  });
-
-  it("tests mutation endpoints for METHOD_NOT_SUPPORTED", () => {
-    const mutations = [
-      "grill.shutdown",
-      "grill.requestStatus",
-      "traeger.refreshGrills",
-      "password.changeOwn",
-    ];
-    for (const ep of mutations) {
-      expect(script).toContain(ep);
-    }
-    expect(script).toContain("METHOD_NOT_SUPPORTED");
-  });
-
   it("prints summary with PASS/FAIL/WARN counts", () => {
     expect(script).toContain("PASS");
     expect(script).toContain("FAIL");
@@ -258,6 +206,297 @@ describe("CI-2: Smoke Test Script", () => {
   it("cleans up temp files on exit", () => {
     expect(script).toContain("trap");
     expect(script).toContain("rm -f");
+  });
+});
+
+describe("CI-2: Smoke Test Script — REST Endpoints (Section 1)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests /api/health, /api/auth/ok, /api/version", () => {
+    expect(script).toContain("/api/health");
+    expect(script).toContain("/api/auth/ok");
+    expect(script).toContain("/api/version");
+  });
+
+  it("verifies frontend serves HTML with #root", () => {
+    expect(script).toContain('<div id="root"');
+  });
+});
+
+describe("CI-2: Smoke Test Script — Public tRPC (Section 2)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests public tRPC endpoints", () => {
+    const publicEndpoints = [
+      "setup.status",
+      "auth.me",
+      "meatProfiles.list",
+      "templates.list",
+      "customTemplates.community",
+    ];
+    for (const ep of publicEndpoints) {
+      expect(script).toContain(ep);
+    }
+  });
+});
+
+describe("CI-2: Smoke Test Script — Protected tRPC (Section 3)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests protected tRPC endpoints for UNAUTHORIZED", () => {
+    const protectedEndpoints = [
+      "grill.telemetry",
+      "traeger.status",
+      "liveCook.active",
+      "cookSession.list",
+      "automation.list",
+      "push.getVapidKey",
+    ];
+    for (const ep of protectedEndpoints) {
+      expect(script).toContain(ep);
+    }
+    expect(script).toContain("UNAUTHORIZED");
+  });
+});
+
+describe("CI-2: Smoke Test Script — Admin Endpoints (Section 4)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests admin endpoints for auth gate", () => {
+    expect(script).toContain("admin.getRegistrationConfig");
+    expect(script).toContain("admin.listUsers");
+  });
+});
+
+describe("CI-2: Smoke Test Script — Mutations (Section 5)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests mutation endpoints for METHOD_NOT_SUPPORTED", () => {
+    const mutations = [
+      "grill.shutdown",
+      "grill.requestStatus",
+      "traeger.refreshGrills",
+      "password.changeOwn",
+    ];
+    for (const ep of mutations) {
+      expect(script).toContain(ep);
+    }
+    expect(script).toContain("METHOD_NOT_SUPPORTED");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: SSE Endpoint (Section 6)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — SSE Endpoint (Section 6)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests /api/sse/telemetry without auth returns 401", () => {
+    expect(script).toContain("/api/sse/telemetry");
+    // The unauthenticated SSE test should check for 401
+    expect(script).toMatch(/sse\/telemetry[\s\S]*?401[\s\S]*?SSE route registered/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: Authentication Flow (Section 7)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — Authentication Flow (Section 7)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("uses a cookie jar for session management", () => {
+    expect(script).toContain("COOKIE_JAR");
+    expect(script).toContain("-c \"$COOKIE_JAR\"");
+    expect(script).toContain("-b \"$COOKIE_JAR\"");
+  });
+
+  it("logs in via Better Auth email/password sign-in", () => {
+    expect(script).toContain("/api/auth/sign-in/email");
+    expect(script).toContain("smoke@test.dev");
+    expect(script).toContain("SmokeTest123!");
+  });
+
+  it("verifies session with auth.me after login", () => {
+    // After login, should call auth.me with cookie to verify session
+    expect(script).toContain("http_get_auth");
+    expect(script).toContain("auth.me");
+    expect(script).toContain("session valid");
+  });
+
+  it("tracks AUTH_OK flag to skip dependent tests on login failure", () => {
+    expect(script).toContain("AUTH_OK=true");
+    expect(script).toContain("AUTH_OK=false");
+    expect(script).toContain('AUTH_OK" = true');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: Traeger Integration (Section 8)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — Traeger Integration (Section 8)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests traeger.status returns connected:false when no account linked", () => {
+    expect(script).toContain("traeger.status");
+    expect(script).toContain('"connected":false');
+    expect(script).toContain("no Traeger account linked");
+  });
+
+  it("tests traeger.mqttCredentials returns PRECONDITION_FAILED", () => {
+    expect(script).toContain("traeger.mqttCredentials");
+    expect(script).toContain("PRECONDITION_FAILED");
+  });
+
+  it("tests liveCook.active returns PRECONDITION_FAILED (no MQTT)", () => {
+    // Should test liveCook.active with auth and expect PRECONDITION_FAILED
+    expect(script).toMatch(/liveCook\.active[\s\S]*?PRECONDITION_FAILED[\s\S]*?no MQTT/);
+  });
+
+  it("tests liveCook.stallInfo returns PRECONDITION_FAILED (no MQTT)", () => {
+    expect(script).toContain("liveCook.stallInfo");
+    expect(script).toMatch(/stallInfo[\s\S]*?PRECONDITION_FAILED/);
+  });
+
+  it("uses authenticated requests for Traeger integration tests", () => {
+    // Traeger tests should use http_get_auth (cookie-based)
+    expect(script).toContain("http_get_auth");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: Authenticated Endpoints (Section 9)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — Authenticated Endpoints (Section 9)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests cookSession.list with authentication", () => {
+    expect(script).toContain("cookSession.list (authenticated)");
+  });
+
+  it("tests automation.list with authentication", () => {
+    expect(script).toContain("automation.list (authenticated)");
+  });
+
+  it("tests analytics.summary with authentication", () => {
+    expect(script).toContain("analytics.summary (authenticated)");
+  });
+
+  it("tests push.getVapidKey with authentication and checks vapidPublicKey field", () => {
+    expect(script).toContain("push.getVapidKey (authenticated)");
+    expect(script).toContain("vapidPublicKey");
+  });
+
+  it("tests customTemplates.mine with authentication", () => {
+    expect(script).toContain("customTemplates.mine (authenticated)");
+  });
+
+  it("tests executions.history with authentication", () => {
+    expect(script).toContain("executions.history (authenticated)");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: Admin Authenticated (Section 10)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — Admin Authenticated (Section 10)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests admin.getRegistrationConfig with admin session", () => {
+    expect(script).toContain("admin.getRegistrationConfig (admin)");
+    expect(script).toContain('"mode"');
+  });
+
+  it("tests admin.listUsers with admin session", () => {
+    expect(script).toContain("admin.listUsers (admin)");
+    expect(script).toContain('"users"');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — NEW: SSE Authenticated (Section 11)
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — SSE Authenticated (Section 11)", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("tests /api/sse/telemetry with auth checks event-stream headers", () => {
+    expect(script).toContain("text/event-stream");
+    expect(script).toContain("header_contains");
+  });
+
+  it("handles SSE timeout gracefully (long-lived connection)", () => {
+    // SSE connections stay open, curl will timeout — script should handle this
+    expect(script).toContain("max-time");
+    expect(script).toContain("connection held open");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// CI-2: Smoke Test Script — Section Count
+// ═══════════════════════════════════════════════════════════
+
+describe("CI-2: Smoke Test Script — Coverage Completeness", () => {
+  const script = fs.readFileSync(
+    path.join(projectRoot, "tests/smoke-test.sh"),
+    "utf-8"
+  );
+
+  it("has 11 test sections", () => {
+    // Count section headers (numbered 1-11)
+    const sectionHeaders = script.match(/─── \d+\./g) || [];
+    expect(sectionHeaders.length).toBe(11);
+  });
+
+  it("includes both unauthenticated and authenticated test paths", () => {
+    expect(script).toContain("http_get");
+    expect(script).toContain("http_get_auth");
+    expect(script).toContain("http_post_auth");
+  });
+
+  it("cleans up cookie jar, body file, and header file on exit", () => {
+    expect(script).toContain("COOKIE_JAR");
+    expect(script).toContain("HEADER_FILE");
+    expect(script).toContain("BODY_FILE");
+    // All three should be in the trap cleanup
+    expect(script).toMatch(/trap.*BODY_FILE.*HEADER_FILE.*COOKIE_JAR/);
   });
 });
 

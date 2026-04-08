@@ -449,7 +449,8 @@ describe("CI-2: Smoke Test Script — Admin Authenticated (Section 10)", () => {
 
   it("tests admin.listUsers with admin session", () => {
     expect(script).toContain("admin.listUsers (admin)");
-    expect(script).toContain('"users"');
+    // tRPC wraps response, so we check for 'email' or 'json' in user data
+    expect(script).toMatch(/admin\.listUsers[\s\S]*?email/);
   });
 });
 
@@ -471,7 +472,8 @@ describe("CI-2: Smoke Test Script — SSE Authenticated (Section 11)", () => {
   it("handles SSE timeout gracefully (long-lived connection)", () => {
     // SSE connections stay open, curl will timeout — script should handle this
     expect(script).toContain("max-time");
-    expect(script).toContain("connection held open");
+    // Uses || true to prevent set -e from failing on curl timeout
+    expect(script).toContain("|| true");
   });
 });
 

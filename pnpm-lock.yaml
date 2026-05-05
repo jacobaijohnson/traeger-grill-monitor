@@ -110,8 +110,8 @@ importers:
         specifier: ^4.22.1
         version: 4.22.1
       express-rate-limit:
-        specifier: ^8.4.1
-        version: 8.4.1(express@4.22.1)
+        specifier: ^8.5.0
+        version: 8.5.0(express@4.22.1)
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
@@ -195,8 +195,8 @@ importers:
         specifier: ^0.28.0
         version: 0.28.0
       pnpm:
-        specifier: ^10.33.2
-        version: 10.33.2
+        specifier: ^10.33.3
+        version: 10.33.3
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
@@ -2728,8 +2728,8 @@ packages:
     resolution: {integrity: sha512-JhFGDVJ7tmDJItKhYgJCGLOWjuK9vPxiXoUFLwLDc99NlmklilbiQJwoctZtt13+xMw91MCk/REan6MWHqDjyA==}
     engines: {node: '>=12.0.0'}
 
-  express-rate-limit@8.4.1:
-    resolution: {integrity: sha512-NGVYwQSAyEQgzxX1iCM978PP9AdO/hW93gMcF6ZwQCm+rFvLsBH6w4xcXWTcliS8La5EPRN3p9wzItqBwJrfNw==}
+  express-rate-limit@8.5.0:
+    resolution: {integrity: sha512-XKhFohWaSBdVJNTi5TaHziqnPkv04I9UQV6q1Wy7Ui6GGQZVW12ojDFwqer14EvCXxjvPG0CyWXx7cAXpALB4Q==}
     engines: {node: '>= 16'}
     peerDependencies:
       express: '>= 4.11'
@@ -3171,8 +3171,8 @@ packages:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
     hasBin: true
 
-  pnpm@10.33.2:
-    resolution: {integrity: sha512-qQ+vb+6rca1sblf5Tg/hoS9dzCLNdU20CulZPraj4LaxLjVAIYuzeuCDQEsfLObbKkEh6XmCm0r/lLmfSdoc+A==}
+  pnpm@10.33.3:
+    resolution: {integrity: sha512-oZdENkp+JIuSZXpMpZc/k1TSHK+YJXlnSxxTnzLHQgxHE4rYsSVN8Hq6m8eC2bMCnj2zTV2/+XQybrdNrI/0iQ==}
     engines: {node: '>=18.12'}
     hasBin: true
 
@@ -5770,7 +5770,7 @@ snapshots:
 
   expect-type@1.2.2: {}
 
-  express-rate-limit@8.4.1(express@4.22.1):
+  express-rate-limit@8.5.0(express@4.22.1):
     dependencies:
       express: 4.22.1
       ip-address: 10.1.0
@@ -6204,7 +6204,7 @@ snapshots:
       sonic-boom: 4.2.1
       thread-stream: 4.0.0
 
-  pnpm@10.33.2: {}
+  pnpm@10.33.3: {}
 
   postcss@8.5.14:
     dependencies:

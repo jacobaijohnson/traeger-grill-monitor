@@ -190,10 +190,11 @@ describe("Preset Library", () => {
   it("Competition Brisket has the correct multi-phase structure", () => {
     const brisket = PRESET_PROGRAMS.find((p) => p.name === "Competition Brisket");
     expect(brisket).toBeDefined();
-    expect(brisket!.steps.length).toBe(3); // Low & Slow, The Crank, Rest Hold
+    expect(brisket!.steps.length).toBe(4); // Low & Slow, The Crank, Active Hold, Rest Hold
     expect(brisket!.steps[0].name).toBe("Low & Slow");
     expect(brisket!.steps[1].name).toBe("The Crank");
-    expect(brisket!.steps[2].name).toBe("Rest Hold");
+    expect(brisket!.steps[2].name).toBe("Active Hold");
+    expect(brisket!.steps[3].name).toBe("End Cook");
 
     // First step should have alarm on trigger
     expect(brisket!.steps[0].alertOnTrigger?.type).toBe("alarm");
@@ -204,8 +205,13 @@ describe("Preset Library", () => {
     expect(setTempAction).toBeDefined();
     expect(setTempAction!.params?.temp).toBe(165); // lowest Traeger temp — auto-step-down
 
-    // Rest Hold step has manual trigger (user ends when ready)
-    const restStep = brisket!.steps[2];
+    // Active Hold step has timer trigger with probe_temp_drop safety
+    const holdStep = brisket!.steps[2];
+    expect(holdStep.trigger.type).toBe("timer");
+    expect(holdStep.trigger.secondary?.type).toBe("probe_temp_drop");
+
+    // End Cook step has manual trigger (user ends when ready)
+    const restStep = brisket!.steps[3];
     expect(restStep.trigger.type).toBe("manual");
   });
 

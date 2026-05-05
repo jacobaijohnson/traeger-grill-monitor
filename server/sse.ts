@@ -129,7 +129,7 @@ export function pushAlertEvent(userId: string, alert: { id: string; label: strin
 export function pushAutomationEvent(
   userId: string,
   event: {
-    eventType: "phase_change" | "auto_command" | "escalating_alarm" | "phase_complete";
+    eventType: "phase_change" | "auto_command" | "escalating_alarm" | "phase_complete" | "hold_timer_warning";
     phase?: number;
     phaseName?: string;
     phaseIndex?: number;

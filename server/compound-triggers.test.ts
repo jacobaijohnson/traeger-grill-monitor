@@ -100,8 +100,8 @@ describe("Preset Programs — Compound Triggers", () => {
     }
   });
 
-  it("All 10 preset programs are defined", () => {
-    expect(PRESET_PROGRAMS.length).toBe(10);
+  it("All 11 preset programs are defined", () => {
+    expect(PRESET_PROGRAMS.length).toBe(11);
     const names = PRESET_PROGRAMS.map((p) => p.name);
     expect(names).toContain("Competition Brisket");
     expect(names).toContain("Reverse Sear Steak");
@@ -113,6 +113,7 @@ describe("Preset Programs — Compound Triggers", () => {
     expect(names).toContain("Smoked Salmon");
     expect(names).toContain("Smoked Turkey");
     expect(names).toContain("Pork Belly Burnt Ends");
+    expect(names).toContain("Active Hold (Any Meat)");
   });
 });
 

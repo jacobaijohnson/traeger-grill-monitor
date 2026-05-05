@@ -33,10 +33,13 @@ import { autoLog } from "../logger";
 function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[] {
   return steps.map((step) => {
     // Determine trigger type
-    let triggerType: "probe_temp" | "time" | "manual" = "manual";
+    let triggerType: "probe_temp" | "probe_temp_drop" | "time" | "manual" = "manual";
     let triggerValue = 0;
     if (step.trigger.type === "probe_temp") {
       triggerType = "probe_temp";
+      triggerValue = typeof step.trigger.value === "number" ? step.trigger.value : Number(step.trigger.value) || 0;
+    } else if (step.trigger.type === "probe_temp_drop") {
+      triggerType = "probe_temp_drop";
       triggerValue = typeof step.trigger.value === "number" ? step.trigger.value : Number(step.trigger.value) || 0;
     } else if (step.trigger.type === "timer") {
       triggerType = "time";
@@ -125,14 +128,17 @@ function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[]
     }
 
     // --- Compound trigger: map secondary trigger ---
-    let secondaryTriggerType: "probe_temp" | "time" | "manual" | undefined;
+    let secondaryTriggerType: "probe_temp" | "probe_temp_drop" | "time" | "manual" | undefined;
     let secondaryTriggerValue: number | undefined;
     let triggerLogic = step.trigger.logic;
 
     if (step.trigger.secondary) {
       const sec = step.trigger.secondary;
-      if (sec.type === "probe_temp" || sec.type === "probe_temp_drop" || sec.type === "grill_temp") {
-        secondaryTriggerType = sec.type === "grill_temp" ? "probe_temp" : "probe_temp"; // simplified
+      if (sec.type === "probe_temp" || sec.type === "probe_temp_drop") {
+        secondaryTriggerType = sec.type;
+        secondaryTriggerValue = typeof sec.value === "number" ? sec.value : Number(sec.value) || 0;
+      } else if (sec.type === "grill_temp") {
+        secondaryTriggerType = "probe_temp"; // simplified
         secondaryTriggerValue = typeof sec.value === "number" ? sec.value : Number(sec.value) || 0;
       } else if (sec.type === "timer") {
         secondaryTriggerType = "time";
@@ -140,6 +146,35 @@ function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[]
       } else if (sec.type === "manual") {
         secondaryTriggerType = "manual";
       }
+    }
+
+    // --- Hold phase detection ---
+    let isHoldPhase = false;
+    let holdConfig: AutomationStage["holdConfig"] | undefined;
+
+    // Detect hold phases by checking for hold-related actions and step metadata
+    const hasKeepWarmEntry = (step.entryActions ?? []).some(a => a.type === "keep_warm_on");
+    const hasKeepWarmAction = step.actions.some(a => a.type === "keep_warm_on");
+    const stepNameLower = step.name.toLowerCase();
+    const isHoldByName = stepNameLower.includes("hold") || stepNameLower.includes("rest hold") || stepNameLower.includes("active hold");
+
+    if ((hasKeepWarmEntry || hasKeepWarmAction || isHoldByName) && step.trigger.type === "manual") {
+      isHoldPhase = true;
+    }
+
+    // Extract hold config from step actions/params if present
+    if (isHoldPhase) {
+      const holdTempAction = (step.entryActions ?? []).find(a => a.type === "set_grill_temp");
+      const targetTemp = holdTempAction?.params?.temp
+        ? (typeof holdTempAction.params.temp === "number" ? holdTempAction.params.temp : Number(holdTempAction.params.temp) || 165)
+        : grillTemp || 165;
+
+      holdConfig = {
+        targetTemp: Math.max(165, Math.min(200, targetTemp as number)), // Clamp to Traeger-safe range
+        minSafeTemp: 140,  // USDA minimum
+        maxHoldTime: 43200, // Default 12 hours max
+        alertBelowTemp: 145, // Alert 5°F above danger zone
+      };
     }
 
     return {
@@ -160,6 +195,8 @@ function programStepsToAutomationStages(steps: ProgramStep[]): AutomationStage[]
       secondaryTriggerType,
       secondaryTriggerValue,
       triggerLogic,
+      isHoldPhase,
+      holdConfig,
     };
   });
 }

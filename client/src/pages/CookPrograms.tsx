@@ -592,6 +592,109 @@ function ProgramCard({ item, onSelect }: { item: UnifiedProgram; onSelect: () =>
   );
 }
 
+// ─── Hold Phase Display ──────────────────────────
+
+function HoldPhaseDisplay({
+  probeTemp,
+  grillTemp,
+  phaseStartedAt,
+  step,
+}: {
+  probeTemp: number;
+  grillTemp: number;
+  phaseStartedAt?: number;
+  step: ProgramStep;
+}) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Extract hold time from trigger value
+  const holdTimeSec = step.trigger.type === "timer"
+    ? (typeof step.trigger.value === "number" ? step.trigger.value : Number(step.trigger.value) || 14400)
+    : 14400;
+
+  // Extract safety temp from secondary trigger
+  const safetyTemp = step.trigger.secondary?.type === "probe_temp_drop"
+    ? (typeof step.trigger.secondary.value === "number" ? step.trigger.secondary.value : Number(step.trigger.secondary.value) || 145)
+    : 145;
+
+  const elapsed = phaseStartedAt ? (now - phaseStartedAt) / 1000 : 0;
+  const remaining = Math.max(0, holdTimeSec - elapsed);
+  const progress = holdTimeSec > 0 ? Math.min(100, (elapsed / holdTimeSec) * 100) : 0;
+
+  const formatTime = (sec: number) => {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  };
+
+  const isSafe = probeTemp >= safetyTemp;
+  const isWarning = probeTemp > 0 && probeTemp < safetyTemp + 10 && probeTemp >= safetyTemp;
+  const isDanger = probeTemp > 0 && probeTemp < safetyTemp;
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/30 space-y-3">
+      {/* Hold Status Banner */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-mono ${
+        isDanger ? "bg-red-500/10 text-red-400 border border-red-500/30" :
+        isWarning ? "bg-amber-500/10 text-amber-400 border border-amber-500/30" :
+        "bg-blue-500/10 text-blue-400 border border-blue-500/30"
+      }`}>
+        <Shield className="h-3.5 w-3.5" />
+        <span>
+          {isDanger ? `⚠️ SAFETY: Probe ${Math.round(probeTemp)}°F < ${safetyTemp}°F minimum!` :
+           isWarning ? `Probe approaching safety threshold (${safetyTemp}°F)` :
+           `Hold active — Probe ${Math.round(probeTemp)}°F (safe above ${safetyTemp}°F)`}
+        </span>
+      </div>
+
+      {/* Timer Progress */}
+      <div>
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono mb-1">
+          <span className="flex items-center gap-1"><Timer className="h-3 w-3" /> Hold Timer</span>
+          <span>{formatTime(elapsed)} / {formatTime(holdTimeSec)}</span>
+        </div>
+        <div className="h-2 bg-secondary rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-1000 bg-blue-500"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className="text-[10px] text-muted-foreground/60 font-mono mt-1 text-right">
+          {remaining > 0 ? `${formatTime(remaining)} remaining` : "Timer complete!"}
+        </div>
+      </div>
+
+      {/* Temperature Gauges */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-secondary/30 rounded-md p-2">
+          <div className="text-[10px] text-muted-foreground/60 font-mono uppercase">Probe</div>
+          <div className={`text-lg font-bold font-mono tabular-nums ${
+            isDanger ? "text-red-400" : isWarning ? "text-amber-400" : "text-green-400"
+          }`}>
+            {probeTemp}°F
+          </div>
+          <div className="text-[10px] text-muted-foreground/60 font-mono">Min: {safetyTemp}°F</div>
+        </div>
+        <div className="bg-secondary/30 rounded-md p-2">
+          <div className="text-[10px] text-muted-foreground/60 font-mono uppercase">Grill</div>
+          <div className="text-lg font-bold font-mono tabular-nums text-foreground">
+            {grillTemp}°F
+          </div>
+          <div className="text-[10px] text-muted-foreground/60 font-mono">Target: 165°F</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Live Execution Display ──────────────────────────
 
 function LiveExecution({
@@ -718,6 +821,15 @@ function LiveExecution({
               </div>
               <AlertBadge step={currentStep} />
             </div>
+            {/* Hold Phase Indicator */}
+            {currentStep.name.toLowerCase().includes("hold") && (
+              <HoldPhaseDisplay
+                probeTemp={probeTemp}
+                grillTemp={grillTemp}
+                phaseStartedAt={liveState.phaseStartedAt}
+                step={currentStep}
+              />
+            )}
           </div>
         )}
 

@@ -98,7 +98,7 @@ export interface CookStage {
 export interface AutomationStage {
   name: string;
   grillTemp: number;                          // Target grill temp for this phase
-  triggerType: "probe_temp" | "time" | "manual";
+  triggerType: "probe_temp" | "probe_temp_drop" | "time" | "manual";
   triggerValue: number;                       // Probe °F or seconds
   superSmoke: boolean;
   alertMessage: string;
@@ -112,12 +112,20 @@ export interface AutomationStage {
   holdAfterTrigger?: boolean;                 // Stay in this phase after trigger (for rest/hold)
   requireAcknowledge?: boolean;               // Block phase advance until user acknowledges
   // --- Compound trigger extensions ---
-  secondaryTriggerType?: "probe_temp" | "time" | "manual";
+  secondaryTriggerType?: "probe_temp" | "probe_temp_drop" | "time" | "manual";
   secondaryTriggerValue?: number;
   triggerLogic?: "or" | "and" | "fallback" | "priority";  // How primary + secondary combine
   primaryFired?: boolean;                     // Runtime: has primary trigger fired (for AND logic)
   secondaryFired?: boolean;                   // Runtime: has secondary trigger fired (for AND logic)
   timerStartedAt?: number;                    // Runtime: when timer-based trigger started counting
+  // --- Hold phase extensions ---
+  isHoldPhase?: boolean;                      // Marks this phase as an active hold
+  holdConfig?: {                              // Hold configuration (safety-bounded)
+    targetTemp: number;                       // Target hold temp (°F) — clamped to safety range
+    minSafeTemp: number;                      // Minimum safe temp (default 140°F)
+    maxHoldTime: number;                      // Maximum hold duration in seconds
+    alertBelowTemp?: number;                  // Alert if probe drops below this temp
+  };
 }
 
 /**

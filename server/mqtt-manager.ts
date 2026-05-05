@@ -221,7 +221,7 @@ function trackPeaks(session: MqttSession): void {
  * Check if a single trigger condition is met.
  */
 function checkSingleTrigger(
-  type: "probe_temp" | "time" | "manual",
+  type: "probe_temp" | "probe_temp_drop" | "time" | "manual",
   value: number,
   probeTemp: number,
   _grillTemp: number,
@@ -230,6 +230,9 @@ function checkSingleTrigger(
 ): boolean {
   if (type === "probe_temp") {
     return probeTemp >= value;
+  } else if (type === "probe_temp_drop") {
+    // Fires when probe temperature drops to or below the target value
+    return probeTemp > 0 && probeTemp <= value;
   } else if (type === "time") {
     // Timer can use its own start time (for secondary timers) or phase start
     const startTime = timerStartedAt ?? phaseStartedAt;
@@ -303,6 +306,86 @@ function evaluateAutomation(userId: string, session: MqttSession): void {
       ? `${stage.triggerType}=${stage.triggerValue}`
       : `${stage.secondaryTriggerType}=${stage.secondaryTriggerValue}`;
     autoLog.info({ userId, logic, firedBy, triggerDesc }, "Compound trigger met");
+  }
+
+  // --- Hold Phase Safety Monitoring ---
+  // When in a hold phase, continuously monitor probe temp for food safety
+  if (stage.isHoldPhase && stage.holdConfig && !triggerMet) {
+    const { minSafeTemp, alertBelowTemp, maxHoldTime } = stage.holdConfig;
+    const holdAlertTemp = alertBelowTemp ?? minSafeTemp + 5;
+    const holdSafetyKey = `hold-safety-${phase}`;
+    const holdTimerKey = `hold-timer-warning-${phase}`;
+
+    // Check if probe has dropped below the safety alert threshold
+    if (probeTemp > 0 && probeTemp < holdAlertTemp && !cook.autoCommandsSent.includes(holdSafetyKey)) {
+      cook.autoCommandsSent.push(holdSafetyKey);
+
+      const safetyAlert: CookAlert = {
+        id: holdSafetyKey,
+        label: `⚠️ HOLD SAFETY: Probe dropped to ${Math.round(probeTemp)}°F!`,
+        triggerTemp: holdAlertTemp,
+        triggerType: "probe",
+        alertType: "alarm",
+        status: "fired",
+        firedAt: Date.now(),
+        message: `FOOD SAFETY WARNING: Probe temperature dropped to ${Math.round(probeTemp)}°F during hold phase. Minimum safe temp is ${minSafeTemp}°F. Check your meat and probe placement!`,
+      };
+
+      cook.alerts.push(safetyAlert);
+      session.firedAlerts.push({ ...safetyAlert });
+
+      pushAlertEvent(userId, {
+        id: safetyAlert.id,
+        label: safetyAlert.label,
+        message: safetyAlert.message!,
+        alertType: "alarm",
+      });
+
+      // Web Push: critical safety alert
+      sendPushIfEnabled(userId, "alertFired", {
+        title: `⚠️ HOLD SAFETY ALERT`,
+        body: safetyAlert.message!,
+        tag: holdSafetyKey,
+        url: "/live-cook",
+        alarm: true,
+      }).catch(() => {});
+      registerAlarm(userId, holdSafetyKey, {
+        title: `⚠️ HOLD SAFETY ALERT`,
+        body: safetyAlert.message!,
+        tag: holdSafetyKey,
+        url: "/live-cook",
+        alarm: true as const,
+      });
+
+      autoLog.warn({ userId, probeTemp: Math.round(probeTemp), holdAlertTemp, phase }, "Hold safety alert: probe below threshold");
+    }
+
+    // Check if hold time is approaching max (warn at 90%)
+    if (maxHoldTime && cook.phaseStartedAt) {
+      const elapsed = (Date.now() - cook.phaseStartedAt) / 1000;
+      const warningThreshold = maxHoldTime * 0.9;
+      if (elapsed >= warningThreshold && !cook.autoCommandsSent.includes(holdTimerKey)) {
+        cook.autoCommandsSent.push(holdTimerKey);
+        const remainingMins = Math.round((maxHoldTime - elapsed) / 60);
+
+        sendPushIfEnabled(userId, "alertFired", {
+          title: `⏰ Hold Timer Warning`,
+          body: `Hold phase has ~${remainingMins} minutes remaining. Prepare to slice or extend.`,
+          tag: holdTimerKey,
+          url: "/live-cook",
+          alarm: false,
+        }).catch(() => {});
+
+        pushAutomationEvent(userId, {
+          eventType: "hold_timer_warning",
+          phase,
+          phaseName: stage.name,
+          message: `Hold timer warning: ~${remainingMins} minutes remaining`,
+          probeTemp: Math.round(probeTemp),
+          grillTemp: Math.round(grillTemp),
+        });
+      }
+    }
   }
 
   // --- Escalating alarms: re-alarm every N°F above trigger ---
@@ -469,6 +552,22 @@ function advanceAutomationPhase(userId: string, session: MqttSession): void {
   }
 
   const nextStage = cook.automationStages[nextPhase];
+
+  // Auto-enable Keep Warm for hold phases
+  if (nextStage.autoSetKeepWarm && session.sendCommandCallback) {
+    const kwKey = `keepWarm-${nextPhase}`;
+    if (!cook.autoCommandsSent.includes(kwKey)) {
+      cook.autoCommandsSent.push(kwKey);
+      const kwCommand = JSON.stringify({ command: 18 }); // KEEP_WARM_ON
+      session.sendCommandCallback(userId, kwCommand)
+        .then(() => {
+          autoLog.info({ userId, phase: nextPhase, stageName: nextStage.name }, "Auto-enabled Keep Warm for hold phase");
+        })
+        .catch((err: unknown) => {
+          autoLog.error({ userId, err }, "Failed to auto-enable Keep Warm");
+        });
+    }
+  }
 
   // Auto-set grill temp for the new phase (if different from current)
   if (nextStage.grillTemp && session.sendCommandCallback) {
@@ -1188,6 +1287,14 @@ export function getAutomationState(userId: string): {
   currentPhaseName?: string;
   phaseAcknowledged?: boolean;
   autoCommandsSent: string[];
+  phaseStartedAt?: number;
+  isHoldPhase?: boolean;
+  holdConfig?: {
+    targetTemp: number;
+    minSafeTemp: number;
+    maxHoldTime: number;
+    alertBelowTemp?: number;
+  };
 } | null {
   const session = sessions.get(userId);
   if (!session?.activeCook?.automationStages) return null;
@@ -1204,5 +1311,8 @@ export function getAutomationState(userId: string): {
     currentPhaseName: currentStage?.name,
     phaseAcknowledged: cook.phaseAcknowledged,
     autoCommandsSent: cook.autoCommandsSent,
+    phaseStartedAt: cook.phaseStartedAt,
+    isHoldPhase: currentStage?.isHoldPhase,
+    holdConfig: currentStage?.holdConfig,
   };
 }

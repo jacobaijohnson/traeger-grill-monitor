@@ -36,6 +36,13 @@ export interface SSETelemetryData {
       triggerType: string;
       triggerValue: number;
       alertType?: string;
+      isHoldPhase?: boolean;
+      holdConfig?: {
+        targetTemp: number;
+        minSafeTemp: number;
+        maxHoldTime: number;
+        alertBelowTemp?: number;
+      };
     }>;
     phaseAcknowledged?: boolean;
     lastAlarmTemp?: number;

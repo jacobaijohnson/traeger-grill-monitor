@@ -274,6 +274,8 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       { name: "wrap_point", label: "Wrap Point (Probe)", type: "number", default: 160, min: 150, max: 175, unit: "°F", description: "Probe temp to trigger wrap alert" },
       { name: "pull_temp", label: "Pull Temperature", type: "number", default: 200, min: 195, max: 210, unit: "°F", description: "Final probe temp to pull the brisket" },
       { name: "meat_weight_lbs", label: "Meat Weight", type: "number", default: 12, min: 4, max: 25, unit: "lbs", description: "Weight of the brisket" },
+      { name: "hold_temp", label: "Hold Temperature", type: "number", default: 165, min: 165, max: 200, unit: "°F", description: "Grill temp during hold phase (165°F = Keep Warm mode)" },
+      { name: "hold_time", label: "Hold Time", type: "number", default: 14400, min: 1800, max: 64800, unit: "seconds", description: "Maximum hold duration (default 4 hours, max 18 hours)" },
     ],
     steps: [
       {
@@ -322,12 +324,33 @@ export const PRESET_PROGRAMS: CookProgram[] = [
         ],
       },
       {
-        name: "Rest Hold",
-        description: "Grill holds at minimum temp to prevent overcooking while you rest the brisket",
+        name: "Active Hold",
+        description: "Grill holds at {{hold_temp}}°F to keep brisket at safe temp while collagen continues to render. Monitors probe temp for food safety.",
+        trigger: {
+          type: "timer", value: "{{hold_time}}",
+          secondary: { type: "probe_temp_drop", value: 145 },  // Safety: alert if probe drops near danger zone
+          logic: "or",
+        },
+        entryActions: [
+          { type: "set_grill_temp", params: { temp: "{{hold_temp}}" } },
+          { type: "keep_warm_on" },
+          { type: "log_event", params: { message: "Entered active hold — grill at {{hold_temp}}°F. Monitoring probe temp for safety." } },
+          { type: "send_notification", params: { message: "Brisket in active hold at {{hold_temp}}°F. Hold timer started. Meat is safe and resting." } },
+        ],
+        alertOnTrigger: {
+          type: "alarm",
+          message: "Hold phase complete or probe temp dropped below safe threshold! Check your brisket.",
+        },
+        actions: [
+          { type: "sound_alarm", params: { message: "HOLD COMPLETE — Time to slice or probe temp dropped below safe zone!" } },
+        ],
+      },
+      {
+        name: "End Cook",
+        description: "Shutdown grill and end the session",
         trigger: { type: "manual" },
         entryActions: [
-          { type: "log_event", params: { message: "Entered rest hold — grill at minimum temp (165°F)" } },
-          { type: "send_notification", params: { message: "Brisket in rest hold. Pull when ready and end the cook." } },
+          { type: "send_notification", params: { message: "Ready to slice! End the cook when done." } },
         ],
         actions: [
           { type: "shutdown" },
@@ -339,7 +362,10 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       "Fat side down for Traegers — heat comes from below",
       "The stall typically happens between 150-170°F and can last 2-4 hours",
       "Wrap in butcher paper (not foil) to preserve bark while pushing through stall",
-      "Rest for at least 1 hour — longer is better (up to 4 hours in a cooler)",
+      "For the hold: keep brisket wrapped — unwrapping causes moisture loss",
+      "Longer holds (4-12 hours) at 165°F produce more tender results as collagen continues to render",
+      "If brisket was pulled at 195°F (undercook method), hold for 8-18 hours for competition quality",
+      "If brisket was pulled at 203°F+ (fully tender), limit hold to 2-4 hours to prevent mushiness",
       "Spritz with apple cider vinegar every hour during the low & slow phase",
     ],
   },
@@ -409,7 +435,7 @@ export const PRESET_PROGRAMS: CookProgram[] = [
   },
   {
     name: "Pulled Pork",
-    description: "Classic low and slow pulled pork with automatic wrap point and pull temp monitoring.",
+    description: "Classic low and slow pulled pork with automatic wrap point, pull temp monitoring, and configurable active hold.",
     category: "pork",
     method: "smoke",
     meatCut: "Pork Butt / Shoulder",
@@ -420,6 +446,8 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       { name: "smoke_temp", label: "Smoke Temperature", type: "number", default: 225, min: 200, max: 250, unit: "°F" },
       { name: "wrap_point", label: "Wrap Point", type: "number", default: 165, min: 155, max: 175, unit: "°F" },
       { name: "pull_temp", label: "Pull Temperature", type: "number", default: 205, min: 195, max: 210, unit: "°F" },
+      { name: "hold_temp", label: "Hold Temperature", type: "number", default: 165, min: 165, max: 200, unit: "°F", description: "Grill temp during hold phase" },
+      { name: "hold_time", label: "Hold Time", type: "number", default: 14400, min: 3600, max: 43200, unit: "seconds", description: "Hold duration (default 4 hours, max 12 hours)" },
     ],
     steps: [
       {
@@ -457,11 +485,33 @@ export const PRESET_PROGRAMS: CookProgram[] = [
         ],
       },
       {
-        name: "Rest",
-        description: "Rest in cooler or on grill at hold temp",
+        name: "Active Hold",
+        description: "Hold at {{hold_temp}}°F until ready to shred. Monitors probe temp for food safety.",
+        trigger: {
+          type: "timer", value: "{{hold_time}}",
+          secondary: { type: "probe_temp_drop", value: 145 },
+          logic: "or",
+        },
+        entryActions: [
+          { type: "set_grill_temp", params: { temp: "{{hold_temp}}" } },
+          { type: "keep_warm_on" },
+          { type: "log_event", params: { message: "Pork in active hold at {{hold_temp}}°F — shred when ready" } },
+          { type: "send_notification", params: { message: "Pork butt in active hold. Timer running. Shred when ready!" } },
+        ],
+        alertOnTrigger: {
+          type: "alarm",
+          message: "Hold timer complete or probe temp dropped below safe threshold!",
+        },
+        actions: [
+          { type: "sound_alarm", params: { message: "HOLD COMPLETE — Shred the pork or check probe temp!" } },
+        ],
+      },
+      {
+        name: "End Cook",
+        description: "Shutdown grill and end the session",
         trigger: { type: "manual" },
         entryActions: [
-          { type: "log_event", params: { message: "Pork resting — shred when ready" } },
+          { type: "send_notification", params: { message: "Ready to shred! End the cook when done." } },
         ],
         actions: [
           { type: "shutdown" },
@@ -474,6 +524,8 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       "Spritz every hour with apple cider vinegar and apple juice (50/50)",
       "The stall is normal — don't panic, just wrap and push through",
       "Rest for at least 1 hour before pulling — the collagen continues to break down",
+      "Pork butt is very forgiving — can hold safely for 12+ hours at 165°F",
+      "Keep wrapped tightly during the hold for maximum moisture retention",
     ],
   },
   {
@@ -843,6 +895,81 @@ export const PRESET_PROGRAMS: CookProgram[] = [
       "For the braise: 2 tbsp butter, 2 tbsp honey, 1/4 cup BBQ sauce per pound",
       "The glaze phase is where the magic happens — don't skip it",
       "These are best served immediately while the glaze is still tacky",
+    ],
+  },
+  // ─── STANDALONE HOLD PROGRAM ──────────────────────────
+  {
+    name: "Active Hold (Any Meat)",
+    description: "Standalone hold program for keeping cooked meat at a safe temperature. Use after any cook to hold meat on the grill until ready to serve. Configurable temperature and time with food safety monitoring.",
+    category: "other",
+    method: "smoke",
+    meatCut: "Any",
+    difficulty: "beginner",
+    estimatedTime: "1-18 hours",
+    tags: ["hold", "rest", "keep-warm", "food-safety", "any-meat"],
+    variables: [
+      { name: "hold_temp", label: "Hold Temperature", type: "number", default: 165, min: 165, max: 200, unit: "\u00b0F", description: "Grill temperature during hold (165\u00b0F = Keep Warm mode). Higher temps render collagen faster." },
+      { name: "hold_time", label: "Hold Time", type: "number", default: 14400, min: 1800, max: 64800, unit: "seconds", description: "Maximum hold duration. Timer will alarm when complete. (30 min to 18 hours)" },
+      { name: "safety_temp", label: "Safety Alert Temperature", type: "number", default: 145, min: 140, max: 160, unit: "\u00b0F", description: "Alarm fires if probe drops below this temp (USDA minimum: 140\u00b0F)" },
+      { name: "meat_type", label: "Meat Type", type: "enum", default: "beef", options: ["beef", "pork", "poultry", "lamb", "other"], description: "Type of meat being held (affects safety thresholds)" },
+    ],
+    steps: [
+      {
+        name: "Confirm Ready",
+        description: "Confirm meat is cooked and ready for hold. Place wrapped meat on grill.",
+        trigger: { type: "immediate" },
+        entryActions: [
+          { type: "send_notification", params: { message: "Place your wrapped, cooked meat on the grill. Hold phase will begin immediately." } },
+        ],
+        actions: [],
+      },
+      {
+        name: "Active Hold",
+        description: "Holding at {{hold_temp}}\u00b0F. Probe temp monitored for food safety. Alarm sounds if probe drops below {{safety_temp}}\u00b0F or when hold timer completes.",
+        trigger: {
+          type: "timer", value: "{{hold_time}}",
+          secondary: { type: "probe_temp_drop", value: "{{safety_temp}}" },
+          logic: "or",
+        },
+        entryActions: [
+          { type: "set_grill_temp", params: { temp: "{{hold_temp}}" } },
+          { type: "keep_warm_on" },
+          { type: "log_event", params: { message: "Active hold started at {{hold_temp}}\u00b0F. Safety threshold: {{safety_temp}}\u00b0F. Max time: {{hold_time}}s" } },
+          { type: "send_notification", params: { message: "\ud83c\udf21\ufe0f Active Hold started at {{hold_temp}}\u00b0F. Monitoring probe temp for safety. You'll be alerted when done or if temp drops." } },
+        ],
+        alertOnTrigger: {
+          type: "alarm",
+          message: "Hold phase ended! Either timer completed or probe temp dropped below {{safety_temp}}\u00b0F. Check your meat!",
+        },
+        actions: [
+          { type: "sound_alarm", params: { message: "HOLD ALERT \u2014 Timer complete or probe temp below safety threshold! Check your meat immediately." } },
+        ],
+      },
+      {
+        name: "End Hold",
+        description: "Shutdown grill and end the hold session",
+        trigger: { type: "manual" },
+        entryActions: [
+          { type: "send_notification", params: { message: "Hold complete. End the session when ready to serve." } },
+        ],
+        actions: [
+          { type: "keep_warm_off" },
+          { type: "shutdown" },
+          { type: "end_session" },
+        ],
+      },
+    ],
+    tips: [
+      "FOOD SAFETY: Meat must stay above 140\u00b0F (USDA minimum). The default alert at 145\u00b0F gives you a 5\u00b0F safety margin.",
+      "Keep meat wrapped (butcher paper or foil) during the entire hold to prevent moisture loss",
+      "Traeger minimum grill temp is 165\u00b0F \u2014 this is the lowest you can set for a hold",
+      "For brisket pulled early (195\u00b0F): hold 8-18 hours at 165\u00b0F for competition-quality tenderness",
+      "For brisket pulled at full tender (203\u00b0F+): limit hold to 2-4 hours to prevent mushiness",
+      "Pork butt is very forgiving \u2014 can hold 12+ hours safely",
+      "Poultry must stay above 165\u00b0F internal \u2014 set safety alert to 160\u00b0F for poultry",
+      "Higher hold temps (180-200\u00b0F) render collagen faster \u2014 use for underdone cuts",
+      "Lower hold temps (165\u00b0F) are gentler \u2014 use for fully cooked cuts to prevent overcooking",
+      "If probe drops below safety temp, the grill is still at 165\u00b0F+ \u2014 the probe may have shifted. Reinsert and check.",
     ],
   },
 ];

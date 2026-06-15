@@ -30,7 +30,7 @@ COPY vite.config.ts tsconfig.json ./
 RUN pnpm run build:docker
 
 # ─── Stage 2: Production (LSIO base) ─────────────────────
-FROM ghcr.io/linuxserver/baseimage-alpine:3.23
+FROM ghcr.io/linuxserver/baseimage-alpine:3.24
 
 # Set version labels (LSIO convention)
 ARG BUILD_DATE

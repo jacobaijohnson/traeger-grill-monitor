@@ -156,7 +156,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install crane
-        uses: imjasonh/setup-crane@v0.5
+        uses: imjasonh/setup-crane@v0.7
 
       - name: Promote image to :latest
         run: |

@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.source="https://github.com/jacobaijohnson/traeger
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Pin cloudflared version for reproducible builds
-ARG CLOUDFLARED_VERSION=2026.3.0
+ARG CLOUDFLARED_VERSION=2026.10.3
 
 # Environment defaults
 ENV \
